@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,76 +17,68 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import {
-  X,
-  ImageIcon,
-  Sparkles,
-  Tag as TagIcon,
-  TrendingUp,
-  User,
-} from "lucide-react";
+import { X, ImageIcon, Loader2, Save, Edit, User } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
 import Link from "next/link";
-import type { ThreadMarketData, Tag, ThreadExtendedData } from "@/lib/types";
+import type { ForumsThread, ThreadExtendedData } from "@/lib/types";
 
-export default function NewThreadPage() {
+export default function EditThreadPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const params = useParams();
+  const threadId = params.id as string;
+
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const [thread, setThread] = useState<ForumsThread | null>(null);
+  const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
-  const [enableMarket, setEnableMarket] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverImage, setCoverImage] = useState<{
     url: string;
     file?: File;
+    isExisting?: boolean;
   } | null>(null);
-  const [icon, setIcon] = useState<{ url: string; file?: File } | null>(null);
+  const [icon, setIcon] = useState<{
+    url: string;
+    file?: File;
+    isExisting?: boolean;
+  } | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
 
-  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
-  const [loadingMeta, setLoadingMeta] = useState(true);
-
   useEffect(() => {
-    async function fetchMeta() {
+    async function fetchThread() {
       try {
-        const tagsRes = await forumsApi.tags.list();
-        setAvailableTags(tagsRes);
+        const threadData = await forumsApi.threads.get(threadId);
+        setThread(threadData);
+        setTitle(threadData.title);
+        setBody(threadData.body);
+
+        if (threadData.extendedData?.coverImage) {
+          setCoverImage({
+            url: threadData.extendedData.coverImage,
+            isExisting: true,
+          });
+        }
+        if (threadData.extendedData?.icon) {
+          setIcon({ url: threadData.extendedData.icon, isExisting: true });
+        }
       } catch (err) {
-        console.error("Failed to fetch tags:", err);
+        console.error("Failed to fetch thread:", err);
+        setError("Failed to load thread");
       } finally {
-        setLoadingMeta(false);
+        setLoading(false);
       }
     }
-    fetchMeta();
-  }, []);
-
-  const handleAddTag = (tagId: string) => {
-    const tag = availableTags.find((t) => t.id === tagId);
-    if (tag && !selectedTags.find((t) => t.id === tagId)) {
-      setSelectedTags([...selectedTags, tag]);
-    }
-  };
-
-  const handleRemoveTag = (tagId: string) => {
-    setSelectedTags(selectedTags.filter((t) => t.id !== tagId));
-  };
+    if (threadId) fetchThread();
+  }, [threadId]);
 
   const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      if (coverImage?.url) URL.revokeObjectURL(coverImage.url);
+      if (coverImage?.url && !coverImage.isExisting)
+        URL.revokeObjectURL(coverImage.url);
       setCoverImage({ url: URL.createObjectURL(file), file });
     }
     if (coverInputRef.current) coverInputRef.current.value = "";
@@ -95,7 +87,7 @@ export default function NewThreadPage() {
   const handleIconSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      if (icon?.url) URL.revokeObjectURL(icon.url);
+      if (icon?.url && !icon.isExisting) URL.revokeObjectURL(icon.url);
       setIcon({ url: URL.createObjectURL(file), file });
     }
     if (iconInputRef.current) iconInputRef.current.value = "";
@@ -127,31 +119,38 @@ export default function NewThreadPage() {
     });
   };
 
-  if (isLoading || loadingMeta) {
+  const threadAuthorId = thread?.authorId || thread?.userId;
+  const isOwner = user?.id === threadAuthorId;
+
+  if (authLoading || loading) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <Card className="border-border/50 bg-linear-to-b from-card to-card/80">
+        <Card className="border-border/50">
           <CardContent className="py-12 text-center">
-            <Sparkles className="h-8 w-8 text-primary animate-pulse mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading...</p>
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Loading thread...</p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !thread || !isOwner) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <Card className="border-border/50 bg-linear-to-b from-card to-card/80">
+        <Card className="border-border/50">
           <CardContent className="py-12 text-center">
-            <Sparkles className="h-10 w-10 text-primary mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Sign In Required</h2>
-            <p className="text-muted-foreground mb-6">
-              Please sign in to create a new thread.
+            <p className="text-muted-foreground mb-4">
+              {!isAuthenticated
+                ? "Please sign in to edit."
+                : !thread
+                ? "Thread not found."
+                : "You don't have permission."}
             </p>
-            <Button asChild size="lg" className="rounded-full px-8">
-              <Link href="/login">Sign In</Link>
+            <Button asChild className="rounded-full px-8">
+              <Link href={thread ? `/thread/${threadId}` : "/"}>
+                {thread ? "Back to Thread" : "Go Home"}
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -172,65 +171,34 @@ export default function NewThreadPage() {
 
       if (coverImage?.file) {
         coverImageBase64 = await compressImage(coverImage.file, 800);
+      } else if (coverImage?.isExisting) {
+        coverImageBase64 = coverImage.url;
       }
+
       if (icon?.file) {
         iconBase64 = await compressImage(icon.file, 256);
+      } else if (icon?.isExisting) {
+        iconBase64 = icon.url;
       }
 
-      const marketData: ThreadMarketData | undefined = enableMarket
-        ? {
-            marketEnabled: true,
-            marketTypeFinal: null,
-            marketTypeCandidate: "UNKNOWN",
-            windowDays: 14,
-            thresholdValid: 50,
-            validCount: 0,
-            lastWindowCutoffAt: 0,
-            lastProcessed: {
-              mode: "OLDEST",
-              cursor: null,
-              lastPostIdProcessed: "",
-              at: 0,
-            },
-            classification: {
-              confidence: 0,
-              method: "RULE",
-              version: "1.0.0",
-              classifiedAt: Date.now(),
-              lockedAt: null,
-            },
-            analytics: {
-              locked: true,
-              updatedAt: Date.now(),
-              snapshot: null,
-              narrative: null,
-              narrativeUpdatedAt: null,
-              version: "1.0.0",
-            },
-          }
-        : undefined;
-
-      const extendedData: ThreadExtendedData = {};
-      if (marketData) extendedData.market = marketData;
+      const extendedData: ThreadExtendedData = {
+        ...(thread.extendedData || {}),
+      };
       if (coverImageBase64) extendedData.coverImage = coverImageBase64;
+      else delete extendedData.coverImage;
       if (iconBase64) extendedData.icon = iconBase64;
+      else delete extendedData.icon;
 
-      const thread = await forumsApi.threads.create({
+      await forumsApi.threads.update(threadId, {
         title: title.trim(),
         body: body.trim(),
-        userId: user?.id,
-        tags:
-          selectedTags.length > 0 ? selectedTags.map((t) => t.id) : undefined,
         extendedData:
           Object.keys(extendedData).length > 0 ? extendedData : undefined,
       });
 
-      if (coverImage?.url) URL.revokeObjectURL(coverImage.url);
-      if (icon?.url) URL.revokeObjectURL(icon.url);
-
-      router.push(`/thread/${thread.id}`);
+      router.push(`/thread/${threadId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create thread.");
+      setError(err instanceof Error ? err.message : "Failed to update thread.");
     } finally {
       setIsSubmitting(false);
     }
@@ -238,29 +206,28 @@ export default function NewThreadPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <Card className="border-border/50 bg-linear-to-b from-card to-card/80 shadow-xl overflow-hidden">
+      <Card className="border-border/50 shadow-xl overflow-hidden">
         <CardHeader className="pb-6">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Sparkles className="h-5 w-5 text-primary" />
+              <Edit className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-xl">Create New Thread</CardTitle>
-              <CardDescription>Start a new discussion</CardDescription>
+              <CardTitle className="text-xl">Edit Thread</CardTitle>
+              <CardDescription>Update your thread details</CardDescription>
             </div>
           </div>
         </CardHeader>
 
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-6">
-            {/* Cover Image & Icon Row */}
+            {/* Cover & Icon */}
             <div className="space-y-4">
               <Label className="flex items-center gap-2">
                 <ImageIcon className="h-4 w-4 text-muted-foreground" />
                 Thread Branding
               </Label>
 
-              {/* Cover Image */}
               <div className="relative">
                 <input
                   ref={coverInputRef}
@@ -290,7 +257,7 @@ export default function NewThreadPage() {
                         variant="destructive"
                         size="sm"
                         onClick={() => {
-                          if (coverImage.url)
+                          if (coverImage.url && !coverImage.isExisting)
                             URL.revokeObjectURL(coverImage.url);
                           setCoverImage(null);
                         }}
@@ -310,7 +277,7 @@ export default function NewThreadPage() {
                   </button>
                 )}
 
-                {/* Icon - Positioned on Cover */}
+                {/* Icon */}
                 <div className="absolute -bottom-6 left-4">
                   <input
                     ref={iconInputRef}
@@ -352,7 +319,6 @@ export default function NewThreadPage() {
               <Label htmlFor="title">Title</Label>
               <Input
                 id="title"
-                placeholder="Enter a catchy title..."
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="h-12 text-lg"
@@ -365,77 +331,11 @@ export default function NewThreadPage() {
               <Label htmlFor="body">Content</Label>
               <Textarea
                 id="body"
-                placeholder="Share your thoughts..."
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={6}
                 className="resize-none"
                 required
-              />
-            </div>
-
-            {/* Tags */}
-            {availableTags.length > 0 && (
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2">
-                  <TagIcon className="h-4 w-4 text-muted-foreground" />
-                  Tags
-                </Label>
-                {selectedTags.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedTags.map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        variant="secondary"
-                        className="gap-1 px-3 py-1"
-                      >
-                        #{tag.name}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTag(tag.id)}
-                          className="ml-1 hover:text-destructive"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                <Select onValueChange={handleAddTag}>
-                  <SelectTrigger className="bg-muted/30">
-                    <SelectValue placeholder="Add tags..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableTags
-                      .filter(
-                        (tag) => !selectedTags.find((t) => t.id === tag.id)
-                      )
-                      .map((tag) => (
-                        <SelectItem key={tag.id} value={tag.id}>
-                          #{tag.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Market Toggle */}
-            <div className="flex items-center justify-between rounded-xl border bg-muted/30 p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium">Market Analytics</p>
-                  <p className="text-sm text-muted-foreground">
-                    Track prices and trading
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={enableMarket}
-                onCheckedChange={setEnableMarket}
               />
             </div>
 
@@ -458,13 +358,13 @@ export default function NewThreadPage() {
             >
               {isSubmitting ? (
                 <>
-                  <Sparkles className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
                 </>
               ) : (
                 <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Create Thread
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
                 </>
               )}
             </Button>

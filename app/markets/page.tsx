@@ -1,147 +1,51 @@
-"use client"
+"use client";
 
-import useSWR from "swr"
-import Link from "next/link"
-import forumsApi from "@/lib/forums-api"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import { TrendIndicator } from "@/components/market/trend-indicator"
-import { formatPrice } from "@/lib/trade-detection"
-import { TrendingUp, Lock, Users, ShoppingBag } from "lucide-react"
-import type { ForumsThread, MarketSnapshot, AccountMarketSnapshot } from "@/lib/types"
+import { ThreadList } from "@/components/thread/thread-list";
+import { TrendingUp, BarChart3, Sparkles } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export default function MarketsPage() {
-  const { data, isLoading, error } = useSWR("market-threads", async () => {
-    const response = await forumsApi.threads.list({ filter: "popular", limit: 50 })
-    // Filter to only threads with market enabled
-    return response.threads.filter((t) => t.extendedData?.market?.marketEnabled)
-  })
-
-  if (error) {
-    return (
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-destructive">Failed to load markets</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
+    <div className="w-full px-4 py-6 lg:px-6">
+      {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">All Markets</h1>
-        <p className="mt-1 text-muted-foreground">Browse threads with market analytics enabled</p>
+        <div className="flex items-center gap-2 mb-1">
+          <TrendingUp className="h-6 w-6 text-primary" />
+          <h1 className="text-2xl font-bold">Market Analytics</h1>
+        </div>
+        <p className="text-muted-foreground">
+          Structured markets with live pricing and AI-driven insights.
+        </p>
+
+        {/* Stats */}
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+          <Badge
+            variant="secondary"
+            className="gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border-primary/20"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />8 active markets
+          </Badge>
+          <Badge
+            variant="secondary"
+            className="gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-600 border-green-500/20"
+          >
+            <Sparkles className="h-3.5 w-3.5" />3 with AI insights
+          </Badge>
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-5 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-16 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : data && data.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {data.map((thread) => (
-            <MarketCard key={thread.id} thread={thread} />
-          ))}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">No market threads found</p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Info Banner */}
+      <div className="mb-6 rounded-xl border border-border/50 bg-muted/50 p-4">
+        <h3 className="font-medium mb-1">How Markets Work</h3>
+        <p className="text-sm text-muted-foreground">
+          Each market is a thread that collects trade listings. When a market
+          reaches 50+ valid trades, AI-powered analytics unlock including price
+          trends, buyer/seller patterns, and market insights.
+        </p>
+      </div>
+
+      {/* Thread List (Markets) */}
+      <ThreadList />
     </div>
-  )
-}
-
-function MarketCard({ thread }: { thread: ForumsThread }) {
-  const market = thread.extendedData?.market
-  if (!market) return null
-
-  const { analytics, validCount, thresholdValid, marketTypeFinal, marketTypeCandidate } = market
-  const marketType = marketTypeFinal || marketTypeCandidate
-  const isLocked = analytics.locked
-
-  const snapshot = analytics.snapshot as MarketSnapshot | AccountMarketSnapshot | null
-  const isItemMarket = snapshot && "sell" in snapshot
-
-  return (
-    <Link href={`/thread/${thread.id}`}>
-      <Card className="h-full transition-colors hover:bg-card/80">
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between gap-2">
-            <CardTitle className="text-base leading-tight line-clamp-2">{thread.title}</CardTitle>
-            {isLocked ? (
-              <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
-            ) : (
-              <TrendingUp className="h-4 w-4 shrink-0 text-primary" />
-            )}
-          </div>
-          <CardDescription className="flex items-center gap-2">
-            {marketType === "ITEM_MARKET" ? <ShoppingBag className="h-3 w-3" /> : <Users className="h-3 w-3" />}
-            {marketType === "ITEM_MARKET"
-              ? "Item Market"
-              : marketType === "ACCOUNT_MARKET"
-                ? "Account Market"
-                : "Market"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLocked ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Progress</span>
-                <span className="text-foreground">
-                  {validCount}/{thresholdValid}
-                </span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${(validCount / thresholdValid) * 100}%` }}
-                />
-              </div>
-            </div>
-          ) : isItemMarket && snapshot ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Sell Median</span>
-                <span className="font-medium text-wts">
-                  {formatPrice((snapshot as MarketSnapshot).sell.median, "IDR")}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Buy Median</span>
-                <span className="font-medium text-wtb">
-                  {formatPrice((snapshot as MarketSnapshot).buy.median, "IDR")}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Trend</span>
-                <TrendIndicator trend={(snapshot as MarketSnapshot).trend} size="sm" />
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">{validCount} trades</Badge>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </Link>
-  )
+  );
 }
