@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import forumsApi from "@/lib/forums-api";
+import type { ForumsThread } from "@/lib/types";
 
 const navigation = [
   { name: "Live Feed", href: "/", icon: Home },
@@ -23,17 +27,85 @@ const navigation = [
   { name: "Services", href: "/markets?category=services", icon: ShoppingBag },
 ];
 
-// Hot Markets with active trade counts
-const hotMarkets = [
-  { name: "Mobile Legends", slug: "mobile-legends", active: 12 },
-  { name: "Genshin Impact", slug: "genshin-impact", active: 8 },
-  { name: "Uma Musume", slug: "uma-musume", active: 5 },
-  { name: "Valorant", slug: "valorant", active: 4 },
-  { name: "Roblox", slug: "roblox", active: 3 },
-];
+interface HotMarket {
+  name: string;
+  slug: string;
+  active: number;
+  threadId?: string;
+}
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [hotMarkets, setHotMarkets] = useState<HotMarket[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [wtbCount, setWtbCount] = useState(0);
+
+  // Fetch real hot markets data from threads
+  useEffect(() => {
+    const fetchHotMarkets = async () => {
+      try {
+        const response = await forumsApi.threads.list({
+          limit: 20,
+          filter: "newest",
+        });
+
+        if (response.threads && response.threads.length > 0) {
+          // Fetch post counts for each thread
+          const marketsData: HotMarket[] = [];
+          let totalWtb = 0;
+
+          // Fetch post counts in parallel (limit to first 10 for performance)
+          const threadsToProcess = response.threads.slice(0, 10);
+          const postCountPromises = threadsToProcess.map(async (thread) => {
+            try {
+              const postsResponse = await forumsApi.posts.list(thread.id, {
+                limit: 1,
+              });
+              return {
+                thread,
+                count: postsResponse.count ?? postsResponse.posts?.length ?? 0,
+              };
+            } catch {
+              return { thread, count: 0 };
+            }
+          });
+
+          const results = await Promise.all(postCountPromises);
+
+          for (const { thread, count } of results) {
+            const name = thread.title;
+            const slug = thread.id;
+
+            // Check for WTB in thread title
+            if (thread.title.toUpperCase().includes("WTB")) {
+              totalWtb++;
+            }
+
+            marketsData.push({
+              name: name.length > 20 ? name.substring(0, 20) + "..." : name,
+              slug,
+              active: count,
+              threadId: thread.id,
+            });
+          }
+
+          // Sort by activity and take top 5
+          const sortedMarkets = marketsData
+            .sort((a, b) => b.active - a.active)
+            .slice(0, 5);
+
+          setHotMarkets(sortedMarkets);
+          setWtbCount(totalWtb);
+        }
+      } catch (error) {
+        console.error("Failed to fetch hot markets:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHotMarkets();
+  }, []);
 
   return (
     <aside className="hidden w-60 shrink-0 border-r border-border lg:block">
@@ -71,43 +143,62 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Hot Markets */}
+        {/* Hot Markets - Real Data */}
         <div>
           <h3 className="mb-3 flex items-center gap-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
             <Flame className="h-3.5 w-3.5 text-orange-500" />
             Hot Markets
           </h3>
           <div className="space-y-1">
-            {hotMarkets.map((market) => (
-              <Link
-                key={market.slug}
-                href={`/markets?tag=${market.slug}`}
-                className="flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors hover:bg-secondary/50"
-              >
-                <span className="text-muted-foreground hover:text-foreground">
-                  {market.name}
-                </span>
-                <Badge
-                  variant="secondary"
-                  className="h-5 px-1.5 text-xs bg-green-500/10 text-green-600"
+            {isLoading ? (
+              // Skeleton loading
+              Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between px-3 py-2"
                 >
-                  {market.active}
-                </Badge>
-              </Link>
-            ))}
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-5 w-6" />
+                </div>
+              ))
+            ) : hotMarkets.length > 0 ? (
+              hotMarkets.map((market) => (
+                <Link
+                  key={market.slug}
+                  href={`/thread/${market.threadId}`}
+                  className="flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors hover:bg-secondary/50"
+                >
+                  <span className="text-muted-foreground hover:text-foreground truncate max-w-32">
+                    {market.name}
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="h-5 px-1.5 text-xs bg-green-500/10 text-green-600"
+                  >
+                    {market.active}
+                  </Badge>
+                </Link>
+              ))
+            ) : (
+              <p className="px-3 text-xs text-muted-foreground">
+                No active markets yet
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Community Requests Banner */}
-        <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <Badge className="bg-yellow-500 text-black text-xs">WTB</Badge>
-            <span className="text-xs font-medium">Requests Open</span>
+        {/* Community Requests Banner - Real Count */}
+        {wtbCount > 0 && (
+          <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className="bg-yellow-500 text-black text-xs">WTB</Badge>
+              <span className="text-xs font-medium">Requests Open</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {wtbCount} buyers looking for items
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground">
-            6 buyers looking for items
-          </p>
-        </div>
+        )}
 
         {/* Footer */}
         <div className="mt-auto border-t border-border pt-4 text-xs text-muted-foreground">

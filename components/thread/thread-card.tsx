@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import useSWR from "swr";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -10,10 +13,23 @@ import {
   ImageIcon,
   Clock,
 } from "lucide-react";
+import forumsApi from "@/lib/forums-api";
 import type { ForumsThread } from "@/lib/types";
 
 interface ThreadCardProps {
   thread: ForumsThread;
+}
+
+// Format number with k suffix (1000 = 1k, 1800 = 1.8k)
+function formatNumber(num: number): string {
+  if (num >= 1000) {
+    const formatted = (num / 1000).toFixed(1);
+    // Remove trailing .0
+    return formatted.endsWith(".0")
+      ? formatted.slice(0, -2) + "k"
+      : formatted + "k";
+  }
+  return num.toString();
 }
 
 // Detect intent from thread title or body
@@ -70,13 +86,24 @@ export function ThreadCard({ thread }: ThreadCardProps) {
 
   const intent = detectIntent(thread.title, thread.body);
 
+  // Fetch posts to get actual count
+  const { data: postsData } = useSWR(
+    ["thread-posts-count", thread.id],
+    () => forumsApi.posts.list(thread.id, { limit: 1 }),
+    { revalidateOnFocus: false }
+  );
+
+  // Use real data from thread or fetched data
+  const viewCount = thread.viewCount || 0;
+  const postCount = postsData?.count ?? thread.postCount ?? 0;
+
   return (
     <Link
       href={`/thread/${thread.id}`}
       className="group block rounded-2xl border border-border bg-card overflow-hidden transition-all hover:shadow-xl hover:border-primary/30 hover:-translate-y-0.5"
     >
       {/* Cover with Intent Badge */}
-      <div className="relative aspect-[3/1] w-full overflow-hidden bg-gradient-to-br from-primary/10 via-muted to-primary/5">
+      <div className="relative aspect-3/1 w-full overflow-hidden bg-linear-to-br from-primary/10 via-muted to-primary/5">
         {coverImage ? (
           <img
             src={coverImage}
@@ -122,7 +149,7 @@ export function ThreadCard({ thread }: ThreadCardProps) {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+              <div className="h-full w-full flex items-center justify-center bg-linear-to-br from-primary/20 to-primary/5">
                 <span className="text-lg font-bold text-primary">
                   {thread.title.charAt(0).toUpperCase()}
                 </span>
@@ -190,15 +217,17 @@ export function ThreadCard({ thread }: ThreadCardProps) {
             </span>
           )}
 
-          {/* Micro-interactions */}
+          {/* Micro-interactions - Real Data with k suffix */}
           <div className="ml-auto flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1" title="Views">
-              <Eye className="h-3.5 w-3.5" />
-              {thread.viewCount || Math.floor(Math.random() * 50) + 5}
-            </span>
-            <span className="flex items-center gap-1" title="Inquiries">
+            {viewCount > 0 && (
+              <span className="flex items-center gap-1" title="Views">
+                <Eye className="h-3.5 w-3.5" />
+                {formatNumber(viewCount)}
+              </span>
+            )}
+            <span className="flex items-center gap-1" title="Posts">
               <MessageSquare className="h-3.5 w-3.5" />
-              {thread.postCount || 0}
+              {formatNumber(postCount)}
             </span>
             <span className="flex items-center gap-1" title="Last activity">
               <Clock className="h-3.5 w-3.5" />

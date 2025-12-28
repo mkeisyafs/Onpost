@@ -38,6 +38,13 @@ export function ThreadView({ threadId }: ThreadViewProps) {
     revalidateOnFocus: false,
   });
 
+  // Fetch posts to get actual count
+  const { data: postsData } = useSWR(
+    thread ? ["posts-count", threadId, refreshKey] : null,
+    () => forumsApi.posts.list(threadId, { limit: 1 }),
+    { revalidateOnFocus: false }
+  );
+
   // Handle scroll to show/hide scroll-to-top button
   useEffect(() => {
     const handleScroll = () => {
@@ -103,7 +110,10 @@ export function ThreadView({ threadId }: ThreadViewProps) {
     <>
       <div className="mx-auto max-w-4xl px-4 py-6">
         {/* Thread Header */}
-        <ThreadHeader thread={thread} />
+        <ThreadHeader
+          thread={thread}
+          postCount={postsData?.count ?? thread.postCount ?? 0}
+        />
 
         {/* Market Tabs */}
         {hasMarket && (
@@ -123,13 +133,13 @@ export function ThreadView({ threadId }: ThreadViewProps) {
                 <h2 className="text-lg font-semibold text-foreground">
                   Replies
                   <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({thread.postCount || 0})
+                    ({postsData?.count ?? thread.postCount ?? 0})
                   </span>
                 </h2>
               </div>
 
               {/* System Welcome Message - shown for new threads */}
-              {(thread.postCount || 0) < 3 && (
+              {(postsData?.count ?? thread.postCount ?? 0) < 3 && (
                 <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 flex items-start gap-3">
                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <span className="text-lg">🏪</span>

@@ -27,9 +27,10 @@ import { useAuth } from "@/lib/auth-context";
 
 interface ThreadHeaderProps {
   thread: ForumsThread;
+  postCount?: number;
 }
 
-export function ThreadHeader({ thread }: ThreadHeaderProps) {
+export function ThreadHeader({ thread, postCount }: ThreadHeaderProps) {
   const { user } = useAuth();
 
   const threadAuthorId = thread.authorId || thread.userId || "";
@@ -158,17 +159,19 @@ export function ThreadHeader({ thread }: ThreadHeaderProps) {
 
           {/* Stats */}
           <div className="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
+            {thread.viewCount !== undefined && thread.viewCount > 0 && (
+              <div className="flex flex-col items-center">
+                <span className="font-semibold text-foreground">
+                  {thread.viewCount}
+                </span>
+                <span className="text-xs flex items-center gap-1">
+                  <Eye className="h-3 w-3" /> views
+                </span>
+              </div>
+            )}
             <div className="flex flex-col items-center">
               <span className="font-semibold text-foreground">
-                {thread.viewCount || 0}
-              </span>
-              <span className="text-xs flex items-center gap-1">
-                <Eye className="h-3 w-3" /> views
-              </span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="font-semibold text-foreground">
-                {thread.postCount || 0}
+                {postCount ?? thread.postCount ?? 0}
               </span>
               <span className="text-xs flex items-center gap-1">
                 <MessageSquare className="h-3 w-3" /> replies

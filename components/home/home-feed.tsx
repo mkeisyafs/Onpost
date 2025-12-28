@@ -61,6 +61,8 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
                 ...post,
                 _threadTitle: thread.title,
                 _threadId: thread.id,
+                _threadViewCount: thread.viewCount || 0,
+                _threadPostCount: thread.postCount || 0,
               }));
               allPosts.push(...postsWithThread);
             }
@@ -131,6 +133,8 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
 interface ExtendedPost extends ForumsPost {
   _threadTitle?: string;
   _threadId?: string;
+  _threadViewCount?: number;
+  _threadPostCount?: number;
 }
 
 function FeedPostCard({ post }: { post: ExtendedPost }) {
@@ -140,6 +144,7 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
   const images = post.extendedData?.images || [];
   const threadTitle = post._threadTitle;
   const threadId = post._threadId;
+  const viewCount = post._threadViewCount || 0;
 
   // Detect intent from body
   const detectIntent = (text: string): "WTS" | "WTB" | "WTT" | null => {
@@ -286,7 +291,7 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Eye className="h-3.5 w-3.5" />
-              {Math.floor(Math.random() * 50) + 5}
+              {viewCount}
             </span>
           </div>
         </div>

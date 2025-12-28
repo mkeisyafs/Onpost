@@ -1,10 +1,44 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { ThreadList } from "@/components/thread/thread-list";
 import { TrendingUp, BarChart3, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import forumsApi from "@/lib/forums-api";
 
 export default function MarketsPage() {
+  const [stats, setStats] = useState({ totalMarkets: 0, withInsights: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch real stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await forumsApi.threads.list({
+          limit: 50,
+          filter: "newest",
+        });
+
+        if (response.threads) {
+          const totalMarkets = response.threads.length;
+          // Count threads with enough posts for AI insights (50+ posts)
+          const withInsights = response.threads.filter(
+            (t) => (t.postCount || 0) >= 50
+          ).length;
+
+          setStats({ totalMarkets, withInsights });
+        }
+      } catch (error) {
+        console.error("Failed to fetch market stats:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   return (
     <div className="w-full px-4 py-6 lg:px-6">
       {/* Header */}
@@ -17,20 +51,31 @@ export default function MarketsPage() {
           Structured markets with live pricing and AI-driven insights.
         </p>
 
-        {/* Stats */}
+        {/* Stats - Real Data */}
         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-          <Badge
-            variant="secondary"
-            className="gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border-primary/20"
-          >
-            <BarChart3 className="h-3.5 w-3.5" />8 active markets
-          </Badge>
-          <Badge
-            variant="secondary"
-            className="gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-600 border-green-500/20"
-          >
-            <Sparkles className="h-3.5 w-3.5" />3 with AI insights
-          </Badge>
+          {isLoading ? (
+            <>
+              <Skeleton className="h-7 w-32" />
+              <Skeleton className="h-7 w-36" />
+            </>
+          ) : (
+            <>
+              <Badge
+                variant="secondary"
+                className="gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border-primary/20"
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+                {stats.totalMarkets} active markets
+              </Badge>
+              <Badge
+                variant="secondary"
+                className="gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-600 border-green-500/20"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {stats.withInsights} with AI insights
+              </Badge>
+            </>
+          )}
         </div>
       </div>
 

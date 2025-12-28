@@ -1,24 +1,103 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { HomePostComposer } from "@/components/home/home-post-composer";
 import { HomeFeed } from "@/components/home/home-feed";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Flame, TrendingUp, Clock, MessageSquare } from "lucide-react";
+import forumsApi from "@/lib/forums-api";
+
+interface FeedStats {
+  activeToday: number;
+  newPosts: number;
+  negotiations: number;
+  trendingTags: { tag: string; count: number }[];
+}
 
 export default function HomePage() {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [stats, setStats] = useState<FeedStats>({
+    activeToday: 0,
+    newPosts: 0,
+    negotiations: 0,
+    trendingTags: [],
+  });
+  const [isLoading, setIsLoading] = useState(true);
 
   const handlePostCreated = () => {
     setRefreshKey((prev) => prev + 1);
+    // Also refresh stats
+    fetchStats();
   };
 
-  // Demo stats
-  const stats = {
-    activeToday: 12,
-    newPosts: 8,
-    negotiations: 3,
+  const fetchStats = async () => {
+    try {
+      const response = await forumsApi.threads.list({
+        limit: 50,
+        filter: "newest",
+      });
+
+      if (response.threads) {
+        const now = new Date();
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        // Count threads created today
+        const threadsToday = response.threads.filter(
+          (t) => new Date(t.createdAt) > oneDayAgo
+        ).length;
+
+        // Count total posts across threads
+        let totalPosts = 0;
+        let totalWtb = 0; // WTB = negotiations/requests
+
+        for (const thread of response.threads) {
+          totalPosts += thread.postCount || 0;
+          if (thread.title.toUpperCase().includes("WTB")) {
+            totalWtb++;
+          }
+        }
+
+        // Count trending by thread titles/tags
+        const tagCounts = new Map<string, number>();
+        for (const thread of response.threads) {
+          // Extract potential game tags from title
+          const title = thread.title.toLowerCase();
+          for (const game of [
+            "mobile-legends",
+            "genshin",
+            "uma-musume",
+            "valorant",
+            "roblox",
+          ]) {
+            if (title.includes(game.split("-")[0])) {
+              tagCounts.set(game, (tagCounts.get(game) || 0) + 1);
+            }
+          }
+        }
+
+        const trendingTags = Array.from(tagCounts.entries())
+          .map(([tag, count]) => ({ tag, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 4);
+
+        setStats({
+          activeToday: response.threads.length,
+          newPosts: totalPosts,
+          negotiations: totalWtb,
+          trendingTags,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch stats:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
 
   return (
     <div className="w-full px-4 py-6 lg:px-6">
@@ -32,29 +111,41 @@ export default function HomePage() {
           Post anything. Trade freely. Markets form when activity grows.
         </p>
 
-        {/* Stats */}
+        {/* Stats - Real Data */}
         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-          <Badge
-            variant="secondary"
-            className="gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-600 border-green-500/20"
-          >
-            <TrendingUp className="h-3.5 w-3.5" />
-            {stats.activeToday} active trades
-          </Badge>
-          <Badge
-            variant="secondary"
-            className="gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 border-blue-500/20"
-          >
-            <Clock className="h-3.5 w-3.5" />
-            {stats.newPosts} new posts
-          </Badge>
-          <Badge
-            variant="secondary"
-            className="gap-1.5 px-3 py-1.5 bg-purple-500/10 text-purple-600 border-purple-500/20"
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            {stats.negotiations} negotiations
-          </Badge>
+          {isLoading ? (
+            <>
+              <Skeleton className="h-7 w-32" />
+              <Skeleton className="h-7 w-28" />
+              <Skeleton className="h-7 w-36" />
+            </>
+          ) : (
+            <>
+              <Badge
+                variant="secondary"
+                className="gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-600 border-green-500/20"
+              >
+                <TrendingUp className="h-3.5 w-3.5" />
+                {stats.activeToday} active markets
+              </Badge>
+              <Badge
+                variant="secondary"
+                className="gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 border-blue-500/20"
+              >
+                <Clock className="h-3.5 w-3.5" />
+                {stats.newPosts} total posts
+              </Badge>
+              {stats.negotiations > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="gap-1.5 px-3 py-1.5 bg-purple-500/10 text-purple-600 border-purple-500/20"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  {stats.negotiations} WTB requests
+                </Badge>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -72,31 +163,42 @@ export default function HomePage() {
         {/* Right Sidebar - Trending */}
         <div className="hidden lg:block">
           <div className="sticky top-20 space-y-4">
-            {/* Trending Tags */}
+            {/* Trending Tags - Real Data */}
             <div className="rounded-xl border border-border bg-card p-4">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
                 <Flame className="h-4 w-4 text-orange-500" />
                 Trending Now
               </h3>
               <div className="space-y-2">
-                {[
-                  "mobile-legends",
-                  "genshin-impact",
-                  "uma-musume",
-                  "valorant",
-                ].map((tag, i) => (
-                  <div
-                    key={tag}
-                    className="flex items-center justify-between py-1.5"
-                  >
-                    <span className="text-sm text-muted-foreground">
-                      #{tag}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {12 - i * 2} posts
-                    </span>
-                  </div>
-                ))}
+                {isLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between py-1.5"
+                    >
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-12" />
+                    </div>
+                  ))
+                ) : stats.trendingTags.length > 0 ? (
+                  stats.trendingTags.map((item) => (
+                    <div
+                      key={item.tag}
+                      className="flex items-center justify-between py-1.5"
+                    >
+                      <span className="text-sm text-muted-foreground">
+                        #{item.tag}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {item.count} posts
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No trending tags yet
+                  </p>
+                )}
               </div>
             </div>
 

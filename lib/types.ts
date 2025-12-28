@@ -226,6 +226,7 @@ export interface ThreadsResponse {
 export interface PostsResponse {
   posts: ForumsPost[];
   nextPostCursor: string | null;
+  count?: number;
 }
 
 export interface MessagesResponse {
