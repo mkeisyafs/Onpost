@@ -135,7 +135,10 @@ function MarketsContent() {
       </div>
 
       {/* Thread List (Markets) */}
-      <ThreadList categoryFilter={categoryFilter} />
+      <ThreadList
+        categoryFilter={categoryFilter}
+        categoryLabel={currentCategory?.label}
+      />
     </div>
   );
 }

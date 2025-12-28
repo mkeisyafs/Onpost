@@ -28,7 +28,7 @@ import type { ForumsThread } from "@/lib/types";
 
 const navigation = [
   { name: "Live Feed", href: "/", icon: Home },
-  { name: "Market Analytics", href: "/markets", icon: TrendingUp },
+  { name: "Market", href: "/markets", icon: TrendingUp },
   { name: "Game Items", href: "/markets?category=game-items", icon: Gamepad2 },
   { name: "Accounts", href: "/markets?category=accounts", icon: Users },
   { name: "Physical Items", href: "/markets?category=physical", icon: Package },

@@ -158,12 +158,8 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
   };
   const intent = detectIntent(post.body);
 
-  // Clean body
-  const displayBody = post.body
-    .replace(/\n\n\[Image \d+\]\s*/g, "")
-    .replace(/#(WTS|WTB|WTT)\s*/gi, "")
-    .replace(/Price:\s*\S+/gi, "")
-    .trim();
+  // Clean body - keep hashtags visible
+  const displayBody = post.body.replace(/\n\n\[Image \d+\]\s*/g, "").trim();
 
   return (
     <Card className="border-border/50 hover:border-border transition-colors">

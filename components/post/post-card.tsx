@@ -234,10 +234,7 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
     WTT: "bg-orange-500/5 border-orange-500/20",
   };
 
-  const displayBody = post.body
-    .replace(/\n\n\[Image \d+\]\s*/g, "")
-    .replace(/#(WTS|WTB|WTT)\s*/gi, "")
-    .trim();
+  const displayBody = post.body.replace(/\n\n\[Image \d+\]\s*/g, "").trim();
 
   const handleLike = async () => {
     if (!isAuthenticated || isLiking) return;
@@ -487,15 +484,7 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
                 >
                   <MessageSquare className="h-4 w-4" />
                   <span className="text-sm">Comment</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-2 rounded-full px-4 hover:bg-green-500/10 hover:text-green-500 transition-all"
-                >
-                  <Repeat2 className="h-4 w-4" />
-                  <span className="text-sm">0</span>
-                </Button>
+                </Button> 
                 <Button
                   variant="ghost"
                   size="sm"

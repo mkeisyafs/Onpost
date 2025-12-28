@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, X, ChevronUp } from "lucide-react";
+import { Plus, X, ChevronUp, Image, Smile } from "lucide-react";
 import Link from "next/link";
 
 interface ThreadViewProps {
@@ -212,14 +212,16 @@ export function ThreadView({ threadId }: ThreadViewProps) {
 
       {/* Create Post Modal */}
       <Dialog open={showPostForm} onOpenChange={setShowPostForm}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create New Post</DialogTitle>
+        <DialogContent className="sm:max-w-lg p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
+          <DialogHeader className="px-6 py-4 border-b border-border/50 bg-muted/30">
+            <DialogTitle className="text-center text-lg font-semibold">Create Post</DialogTitle>
           </DialogHeader>
-          <CreatePostForm
-            threadId={threadId}
-            onPostCreated={handlePostCreated}
-          />
+          <div className="p-6">
+            <CreatePostForm
+              threadId={threadId}
+              onPostCreated={handlePostCreated}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </>

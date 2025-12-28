@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
 import {
   Search,
   TrendingUp,
@@ -13,14 +14,17 @@ import {
   Package,
   ShoppingBag,
   X,
+  MessageSquare,
+  FileText,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import forumsApi from "@/lib/forums-api";
-import type { ForumsThread } from "@/lib/types";
+import type { ForumsThread, ForumsPost } from "@/lib/types";
 
 type CategoryFilter =
   | "all"
@@ -30,6 +34,7 @@ type CategoryFilter =
   | "services";
 type TypeFilter = "all" | "market" | "discussion";
 type SortOption = "newest" | "popular" | "active";
+type SearchTab = "threads" | "posts";
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -37,9 +42,12 @@ function SearchContent() {
 
   const [query, setQuery] = useState(initialQuery);
   const [allThreads, setAllThreads] = useState<ForumsThread[]>([]);
-  const [results, setResults] = useState<ForumsThread[]>([]);
+  const [allPosts, setAllPosts] = useState<ForumsPost[]>([]);
+  const [threadResults, setThreadResults] = useState<ForumsThread[]>([]);
+  const [postResults, setPostResults] = useState<ForumsPost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [activeTab, setActiveTab] = useState<SearchTab>("threads");
 
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
@@ -47,49 +55,73 @@ function SearchContent() {
   const [sortOption, setSortOption] = useState<SortOption>("newest");
   const [showFilters, setShowFilters] = useState(false);
 
-  // Fetch all threads once
+  // Fetch all data once
   useEffect(() => {
-    fetchAllThreads();
+    fetchAllData();
   }, []);
 
   // Search on initial load if query exists
   useEffect(() => {
-    if (initialQuery && allThreads.length > 0) {
+    if (initialQuery && (allThreads.length > 0 || allPosts.length > 0)) {
       applyFilters(initialQuery);
     }
-  }, [initialQuery, allThreads]);
+  }, [initialQuery, allThreads, allPosts]);
 
   // Re-apply filters when filters change
   useEffect(() => {
     if (hasSearched || allThreads.length > 0) {
       applyFilters(query);
     }
-  }, [categoryFilter, typeFilter, sortOption]);
+  }, [categoryFilter, typeFilter, sortOption, activeTab]);
 
-  const fetchAllThreads = async () => {
+  const fetchAllData = async () => {
     setIsLoading(true);
     try {
-      const response = await forumsApi.threads.list({
+      // Fetch threads
+      const threadsResponse = await forumsApi.threads.list({
         limit: 100,
         filter: "newest",
       });
-      if (response.threads) {
-        setAllThreads(response.threads);
+      if (threadsResponse.threads) {
+        setAllThreads(threadsResponse.threads);
+
+        // Fetch posts from each thread
+        const allPostsData: ForumsPost[] = [];
+        for (const thread of threadsResponse.threads.slice(0, 10)) {
+          try {
+            const postsResponse = await forumsApi.posts.list(thread.id, {
+              limit: 20,
+              filter: "newest",
+            });
+            if (postsResponse.posts) {
+              // Add thread info to posts
+              const postsWithThread = postsResponse.posts.map((post) => ({
+                ...post,
+                _threadTitle: thread.title,
+                _threadId: thread.id,
+              }));
+              allPostsData.push(...postsWithThread);
+            }
+          } catch {
+            // Skip failed thread posts
+          }
+        }
+        setAllPosts(allPostsData);
       }
     } catch (error) {
-      console.error("Failed to fetch threads:", error);
+      console.error("Failed to fetch data:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const applyFilters = (searchQuery: string) => {
-    let filtered = [...allThreads];
+    // Filter threads
+    let filteredThreads = [...allThreads];
 
-    // Text search
     if (searchQuery.trim()) {
       const searchLower = searchQuery.toLowerCase();
-      filtered = filtered.filter((thread) => {
+      filteredThreads = filteredThreads.filter((thread) => {
         const titleMatch = thread.title.toLowerCase().includes(searchLower);
         const bodyMatch = thread.body?.toLowerCase().includes(searchLower);
         const tagsMatch = thread.tags?.some((tag) =>
@@ -101,39 +133,65 @@ function SearchContent() {
 
     // Category filter
     if (categoryFilter !== "all") {
-      filtered = filtered.filter(
+      filteredThreads = filteredThreads.filter(
         (thread) => thread.extendedData?.category === categoryFilter
       );
     }
 
     // Type filter
     if (typeFilter === "market") {
-      filtered = filtered.filter(
+      filteredThreads = filteredThreads.filter(
         (thread) => thread.extendedData?.market?.marketEnabled
       );
     } else if (typeFilter === "discussion") {
-      filtered = filtered.filter(
+      filteredThreads = filteredThreads.filter(
         (thread) => !thread.extendedData?.market?.marketEnabled
       );
     }
 
-    // Sort
+    // Sort threads
     if (sortOption === "newest") {
-      filtered.sort(
+      filteredThreads.sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
     } else if (sortOption === "popular") {
-      filtered.sort((a, b) => (b.postCount || 0) - (a.postCount || 0));
+      filteredThreads.sort((a, b) => (b.postCount || 0) - (a.postCount || 0));
     } else if (sortOption === "active") {
-      filtered.sort((a, b) => {
+      filteredThreads.sort((a, b) => {
         const aActive = a.extendedData?.market?.validCount || a.postCount || 0;
         const bActive = b.extendedData?.market?.validCount || b.postCount || 0;
         return bActive - aActive;
       });
     }
 
-    setResults(filtered);
+    setThreadResults(filteredThreads);
+
+    // Filter posts
+    let filteredPosts = [...allPosts];
+
+    if (searchQuery.trim()) {
+      const searchLower = searchQuery.toLowerCase();
+      filteredPosts = filteredPosts.filter((post) => {
+        const bodyMatch = post.body?.toLowerCase().includes(searchLower);
+        const authorMatch = (
+          post.author?.displayName ||
+          post.user?.displayName ||
+          ""
+        )
+          .toLowerCase()
+          .includes(searchLower);
+        return bodyMatch || authorMatch;
+      });
+    }
+
+    // Sort posts
+    filteredPosts.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    setPostResults(filteredPosts);
     setHasSearched(true);
   };
 
@@ -163,6 +221,8 @@ function SearchContent() {
     { value: "physical", label: "Physical Items", icon: Package },
     { value: "services", label: "Services", icon: ShoppingBag },
   ];
+
+  const currentResults = activeTab === "threads" ? threadResults : postResults;
 
   return (
     <div className="w-full px-4 py-6 lg:px-6 max-w-4xl mx-auto">
@@ -207,8 +267,40 @@ function SearchContent() {
           </Button>
         </form>
 
+        {/* Search Tabs */}
+        <div className="mt-4 flex gap-2">
+          <Button
+            variant={activeTab === "threads" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveTab("threads")}
+            className="gap-2 rounded-full"
+          >
+            <FileText className="h-4 w-4" />
+            Threads
+            {hasSearched && (
+              <Badge variant="secondary" className="ml-1">
+                {threadResults.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            variant={activeTab === "posts" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveTab("posts")}
+            className="gap-2 rounded-full"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Posts
+            {hasSearched && (
+              <Badge variant="secondary" className="ml-1">
+                {postResults.length}
+              </Badge>
+            )}
+          </Button>
+        </div>
+
         {/* Filters Panel */}
-        {showFilters && (
+        {showFilters && activeTab === "threads" && (
           <div className="mt-4 p-4 rounded-xl border border-border bg-card space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold flex items-center gap-2">
@@ -329,63 +421,140 @@ function SearchContent() {
         <div className="space-y-4">
           {/* Results Count */}
           <p className="text-muted-foreground">
-            {results.length} result{results.length !== 1 ? "s" : ""}
+            {currentResults.length}{" "}
+            {activeTab === "threads" ? "thread" : "post"}
+            {currentResults.length !== 1 ? "s" : ""}
             {query && ` for "${query}"`}
-            {hasActiveFilters && " (filtered)"}
+            {hasActiveFilters && activeTab === "threads" && " (filtered)"}
           </p>
 
-          {results.length > 0 ? (
+          {currentResults.length > 0 ? (
             <div className="space-y-3">
-              {results.map((thread) => (
-                <Link key={thread.id} href={`/thread/${thread.id}`}>
-                  <Card className="transition-colors hover:bg-muted/50">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold text-foreground truncate">
-                              {thread.title}
-                            </h3>
-                            {thread.extendedData?.market?.marketEnabled && (
-                              <Badge variant="secondary" className="shrink-0">
-                                <TrendingUp className="mr-1 h-3 w-3" />
-                                Market
-                              </Badge>
-                            )}
-                            {thread.extendedData?.category && (
-                              <Badge
-                                variant="outline"
-                                className="shrink-0 text-xs"
-                              >
-                                {thread.extendedData.category}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {thread.body}
-                          </p>
-                          {thread.tags && thread.tags.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              {thread.tags.slice(0, 3).map((tag) => (
-                                <Badge
-                                  key={tag}
-                                  variant="outline"
-                                  className="text-xs"
-                                >
-                                  #{tag}
-                                </Badge>
-                              ))}
+              {activeTab === "threads"
+                ? // Thread Results
+                  threadResults.map((thread) => (
+                    <Link key={thread.id} href={`/thread/${thread.id}`}>
+                      <Card className="transition-colors hover:bg-muted/50">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold text-foreground truncate">
+                                  {thread.title}
+                                </h3>
+                                {thread.extendedData?.market?.marketEnabled && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="shrink-0"
+                                  >
+                                    <TrendingUp className="mr-1 h-3 w-3" />
+                                    Market
+                                  </Badge>
+                                )}
+                                {thread.extendedData?.category && (
+                                  <Badge
+                                    variant="outline"
+                                    className="shrink-0 text-xs"
+                                  >
+                                    {thread.extendedData.category}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {thread.body}
+                              </p>
+                              {thread.tags && thread.tags.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {thread.tags.slice(0, 3).map((tag) => (
+                                    <Badge
+                                      key={tag}
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      #{tag}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                        <div className="text-right text-xs text-muted-foreground shrink-0">
-                          <span>{thread.postCount || 0} posts</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+                            <div className="text-right text-xs text-muted-foreground shrink-0">
+                              <span>{thread.postCount || 0} posts</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))
+                : // Post Results
+                  postResults.map((post) => {
+                    const author = post.author || post.user;
+                    const extendedPost = post as ForumsPost & {
+                      _threadTitle?: string;
+                      _threadId?: string;
+                    };
+
+                    return (
+                      <Link
+                        key={post.id}
+                        href={`/thread/${
+                          extendedPost._threadId || post.threadId
+                        }`}
+                      >
+                        <Card className="transition-colors hover:bg-muted/50">
+                          <CardContent className="p-4">
+                            <div className="flex items-start gap-3">
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage
+                                  src={author?.avatarUrl || undefined}
+                                />
+                                <AvatarFallback>
+                                  {author?.displayName?.charAt(0) || "?"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-semibold text-foreground">
+                                    {author?.displayName || "Anonymous"}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {formatDistanceToNow(
+                                      new Date(post.createdAt),
+                                      {
+                                        addSuffix: true,
+                                      }
+                                    )}
+                                  </span>
+                                </div>
+                                {extendedPost._threadTitle && (
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    in{" "}
+                                    <span className="text-primary">
+                                      {extendedPost._threadTitle}
+                                    </span>
+                                  </p>
+                                )}
+                                <p className="text-sm text-foreground line-clamp-3 whitespace-pre-wrap">
+                                  {post.body}
+                                </p>
+                                {post.extendedData?.images &&
+                                  post.extendedData.images.length > 0 && (
+                                    <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs"
+                                      >
+                                        📷 {post.extendedData.images.length}{" "}
+                                        image(s)
+                                      </Badge>
+                                    </div>
+                                  )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    );
+                  })}
             </div>
           ) : (
             <Card className="border-dashed">
@@ -413,7 +582,7 @@ function SearchContent() {
           <CardContent className="py-12 text-center">
             <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">
-              Search threads and markets
+              Search threads and posts
             </h3>
             <p className="text-muted-foreground">
               Enter keywords or use filters to find what you&apos;re looking for

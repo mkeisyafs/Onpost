@@ -16,12 +16,14 @@ interface ThreadListProps {
   categoryId?: string;
   authorId?: string;
   categoryFilter?: "game-items" | "accounts" | "physical" | "services" | null;
+  categoryLabel?: string;
 }
 
 export function ThreadList({
   categoryId,
   authorId,
   categoryFilter,
+  categoryLabel,
 }: ThreadListProps) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [allThreads, setAllThreads] = useState<ForumsThread[]>([]);
@@ -84,35 +86,29 @@ export function ThreadList({
   // Active Empty State
   if (filteredThreads.length === 0) {
     return (
-      <div className="space-y-4">
-        {/* CTA Card */}
-        <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
-          <CardContent className="py-12 text-center">
-            <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <Sparkles className="h-8 w-8 text-primary" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">Be the First Seller!</h3>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              Start the market by posting your first listing. Early sellers get
-              the most visibility.
-            </p>
-            <Button asChild size="lg" className="rounded-full px-8">
-              <Link href="/thread/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Create Listing
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-
-        {/* Skeleton Preview Cards */}
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 opacity-30 pointer-events-none">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <ThreadCardSkeleton key={i} />
-          ))}
-        </div>
-      </div>
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+        <CardContent className="py-12 text-center">
+          <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+            <Sparkles className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="text-xl font-semibold mb-2">
+            {categoryLabel
+              ? `No threads in ${categoryLabel} yet`
+              : "Be the First Seller!"}
+          </h3>
+          <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+            {categoryLabel
+              ? `Start the ${categoryLabel.toLowerCase()} market by creating the first thread. Be an early seller and get the most visibility!`
+              : "Start the market by posting your first listing. Early sellers get the most visibility."}
+          </p>
+          <Button asChild size="lg" className="rounded-full px-8">
+            <Link href="/thread/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Thread
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 

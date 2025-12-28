@@ -51,18 +51,32 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50">
       {/* Glassmorphism background */}
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-2xl border-b border-border/50" />
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-2xl border-b border-border/50 w-full" />
 
       {/* Glow effect at bottom */}
       <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-transparent via-primary/50 to-transparent" />
 
-      <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4">
+      <div className="relative flex h-16 items-center justify-between gap-4 px-4 lg:px-6">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group shrink-0">
-          <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-linear-to-br from-primary to-accent shadow-lg shadow-primary/25">
-            <Zap className="h-5 w-5 text-primary-foreground" />
+          <div className="relative flex h-9 w-9 items-center justify-center rounded-lg ">
+            <svg
+              width="68"
+              height="63"
+              viewBox="0 0 68 63"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect x="28" y="13" width="14" height="38" fill="#19C63C" />
+              <rect x="42" width="13" height="13" fill="#19C63C" />
+              <rect x="55" y="13" width="13" height="12" fill="#19C63C" />
+              <rect x="41" y="25" width="14" height="13" fill="#19C63C" />
+              <rect x="14" y="25" width="14" height="13" fill="#19C63C" />
+              <rect y="38" width="14" height="13" fill="#19C63C" />
+              <rect x="14" y="51" width="14" height="12" fill="#19C63C" />
+            </svg>
           </div>
-          <span className="hidden text-xl font-bold sm:block gradient-text">
+          <span className="hidden text-xl font-bold sm:block gradient-text ml-2">
             ONPOST
           </span>
         </Link>
