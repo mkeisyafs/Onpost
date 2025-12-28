@@ -59,6 +59,32 @@ export function ThreadView({ threadId }: ThreadViewProps) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Scroll to hash anchor when page loads (for #post-xxx links)
+  useEffect(() => {
+    // Wait for posts to load, then scroll to anchor
+    if (!isLoading && postsData) {
+      const hash = window.location.hash;
+      if (hash && hash.startsWith("#post-")) {
+        // Small delay to ensure DOM is rendered
+        setTimeout(() => {
+          const element = document.querySelector(hash);
+          if (element) {
+            element.scrollIntoView({ behavior: "smooth", block: "center" });
+            // Highlight the post briefly
+            element.classList.add("ring-2", "ring-primary", "ring-offset-2");
+            setTimeout(() => {
+              element.classList.remove(
+                "ring-2",
+                "ring-primary",
+                "ring-offset-2"
+              );
+            }, 3000);
+          }
+        }, 500);
+      }
+    }
+  }, [isLoading, postsData]);
+
   const handlePostCreated = () => {
     setRefreshKey((prev) => prev + 1);
     mutate();
@@ -214,7 +240,9 @@ export function ThreadView({ threadId }: ThreadViewProps) {
       <Dialog open={showPostForm} onOpenChange={setShowPostForm}>
         <DialogContent className="sm:max-w-lg p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
           <DialogHeader className="px-6 py-4 border-b border-border/50 bg-muted/30">
-            <DialogTitle className="text-center text-lg font-semibold">Create Post</DialogTitle>
+            <DialogTitle className="text-center text-lg font-semibold">
+              Create Post
+            </DialogTitle>
           </DialogHeader>
           <div className="p-6">
             <CreatePostForm

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { HomeFeed } from "@/components/home/home-feed";
+import { AIMarketAssistant } from "@/components/home/ai-market-assistant";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Flame, TrendingUp, Clock, MessageSquare } from "lucide-react";
@@ -200,63 +201,66 @@ export default function HomePage() {
           <HomeFeed refreshKey={refreshKey} />
         </div>
 
-        {/* Right Sidebar - Trending */}
+        {/* Right Sidebar - AI Assistant + Trending */}
         <div className="hidden lg:block">
           <div className="sticky top-20 space-y-4">
-            {/* Trending Tags - Real Data */}
+            {/* AI Market Assistant */}
+            <AIMarketAssistant />
+
+            {/* Trending Tags - Compact */}
             <div className="rounded-xl border border-border bg-card p-4">
-              <h3 className="font-semibold mb-3 flex items-center gap-2">
+              <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
                 <Flame className="h-4 w-4 text-orange-500" />
                 Trending Now
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {isLoading ? (
-                  Array.from({ length: 4 }).map((_, i) => (
+                  Array.from({ length: 3 }).map((_, i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-between py-1.5"
+                      className="flex items-center justify-between py-1"
                     >
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-4 w-12" />
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-3 w-10" />
                     </div>
                   ))
                 ) : stats.trendingTags.length > 0 ? (
-                  stats.trendingTags.map((item) => (
+                  stats.trendingTags.slice(0, 3).map((item) => (
                     <div
                       key={item.tag}
-                      className="flex items-center justify-between py-1.5"
+                      className="flex items-center justify-between py-1"
                     >
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         #{item.tag}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {item.count} posts
+                        {item.count}
                       </span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     No trending tags yet
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="rounded-xl border border-border bg-card p-4">
-              <h3 className="font-semibold mb-3">Quick Actions</h3>
-              <div className="space-y-2 text-sm">
+            {/* Quick Actions - Compact */}
+            <div className="rounded-xl border border-border bg-card p-3">
+              <h3 className="font-semibold mb-2 text-sm">Quick Actions</h3>
+              <div className="space-y-1.5 text-xs">
                 <a
                   href="/markets"
                   className="block text-primary hover:underline"
                 >
-                  → View Market Analytics
+                  → Market Analytics
                 </a>
                 <a
                   href="/thread/new"
                   className="block text-primary hover:underline"
                 >
-                  → Create Market Thread
+                  → Create Thread
                 </a>
               </div>
             </div>

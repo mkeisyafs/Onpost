@@ -260,6 +260,7 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
   return (
     <>
       <div
+        id={`post-${post.id}`}
         className={cn(
           "group relative rounded-2xl border border-border bg-card transition-all duration-300 hover:shadow-lg",
           intentBgStyles[intent || ""] || ""
@@ -488,12 +489,17 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
                       </span>
                     )}
                   </div>
-                  {(post.commentCount ?? 0) > 0 && (
+                  {((post as unknown as { commentCount?: number })
+                    .commentCount ?? 0) > 0 && (
                     <button
                       onClick={() => setShowCommentModal(true)}
                       className="hover:underline"
                     >
-                      {post.commentCount} komentar
+                      {
+                        (post as unknown as { commentCount?: number })
+                          .commentCount
+                      }{" "}
+                      komentar
                     </button>
                   )}
                 </div>
