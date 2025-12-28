@@ -1,35 +1,48 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import Link from "next/link"
-import { useAuth } from "@/lib/auth-context"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Search, Menu, MessageSquare, User, LogOut, Plus, TrendingUp } from "lucide-react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AuthModal } from "@/components/auth/auth-modal";
+import {
+  Search,
+  Menu,
+  MessageSquare,
+  User,
+  LogOut,
+  Plus,
+  TrendingUp,
+} from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export function Header() {
-  const { user, isAuthenticated, logout } = useAuth()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const router = useRouter()
+  const { user, isAuthenticated, logout } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<"signin" | "signup">(
+    "signin"
+  );
+  const router = useRouter();
 
   const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery)}`)
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
     }
-  }
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -74,10 +87,19 @@ export function Header() {
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative h-8 w-8 rounded-full"
+                  >
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user?.avatarUrl || undefined} alt={user?.displayName} />
-                      <AvatarFallback>{user?.displayName?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
+                      <AvatarImage
+                        src={user?.avatarUrl || undefined}
+                        alt={user?.displayName}
+                      />
+                      <AvatarFallback>
+                        {user?.displayName?.charAt(0).toUpperCase() || "U"}
+                      </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
@@ -104,18 +126,41 @@ export function Header() {
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/login">Sign In</Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAuthModalTab("signin");
+                  setAuthModalOpen(true);
+                }}
+              >
+                Sign In
               </Button>
-              <Button size="sm" asChild>
-                <Link href="/register">Sign Up</Link>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setAuthModalTab("signup");
+                  setAuthModalOpen(true);
+                }}
+              >
+                Sign Up
               </Button>
+              <AuthModal
+                open={authModalOpen}
+                onOpenChange={setAuthModalOpen}
+                defaultTab={authModalTab}
+              />
             </>
           )}
         </nav>
 
         {/* Mobile Menu Button */}
-        <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle menu</span>
         </Button>
@@ -145,18 +190,37 @@ export function Header() {
                     Profile
                   </Link>
                 </Button>
-                <Button variant="ghost" className="justify-start" onClick={logout}>
+                <Button
+                  variant="ghost"
+                  className="justify-start"
+                  onClick={logout}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="ghost" className="justify-start" asChild>
-                  <Link href="/login">Sign In</Link>
+                <Button
+                  variant="ghost"
+                  className="justify-start"
+                  onClick={() => {
+                    setAuthModalTab("signin");
+                    setAuthModalOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  Sign In
                 </Button>
-                <Button className="justify-start" asChild>
-                  <Link href="/register">Sign Up</Link>
+                <Button
+                  className="justify-start"
+                  onClick={() => {
+                    setAuthModalTab("signup");
+                    setAuthModalOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  Sign Up
                 </Button>
               </>
             )}
@@ -164,5 +228,5 @@ export function Header() {
         </div>
       )}
     </header>
-  )
+  );
 }

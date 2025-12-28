@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,64 +9,70 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { MessageSquare, CheckCircle, Clock, XCircle } from "lucide-react"
-import { useRouter } from "next/navigation"
-import forumsApi from "@/lib/forums-api"
-import { cn } from "@/lib/utils"
-import type { ForumsPost } from "@/lib/types"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MessageSquare, CheckCircle, Clock, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import forumsApi from "@/lib/forums-api";
+import { cn } from "@/lib/utils";
+import type { ForumsPost } from "@/lib/types";
 
 interface TradeActionsProps {
-  post: ForumsPost
-  isOwner: boolean
-  onUpdate?: () => void
-  className?: string
+  post: ForumsPost;
+  isOwner: boolean;
+  onUpdate?: () => void;
+  className?: string;
 }
 
-export function TradeActions({ post, isOwner, onUpdate, className }: TradeActionsProps) {
-  const router = useRouter()
-  const [soldDialogOpen, setSoldDialogOpen] = useState(false)
-  const [finalPrice, setFinalPrice] = useState("")
-  const [isUpdating, setIsUpdating] = useState(false)
+export function TradeActions({
+  post,
+  isOwner,
+  onUpdate,
+  className,
+}: TradeActionsProps) {
+  const router = useRouter();
+  const [soldDialogOpen, setSoldDialogOpen] = useState(false);
+  const [finalPrice, setFinalPrice] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const trade = post.extendedData?.trade
-  if (!trade) return null
+  const trade = post.extendedData?.trade;
+  if (!trade) return null;
 
   const handleContactSeller = () => {
     // Navigate to PM compose with pre-filled data
-    const params = new URLSearchParams({
-      recipientId: post.authorId,
-      linkedPostId: post.id,
-      subject: `Re: ${trade.intent} Inquiry`,
-    })
-    router.push(`/messages/compose?${params}`)
-  }
+    const params = new URLSearchParams();
+    if (post.authorId) params.set("recipientId", post.authorId);
+    params.set("linkedPostId", post.id);
+    params.set("subject", `Re: ${trade.intent} Inquiry`);
+    router.push(`/messages/compose?${params.toString()}`);
+  };
 
   const handleMarkAsSold = async () => {
-    setIsUpdating(true)
+    setIsUpdating(true);
     try {
       await forumsApi.posts.update(post.id, {
         extendedData: {
           trade: {
             ...trade,
             status: "SOLD",
-            finalPrice: finalPrice ? Number.parseFloat(finalPrice) : trade.normalizedPrice,
+            finalPrice: finalPrice
+              ? Number.parseFloat(finalPrice)
+              : trade.normalizedPrice,
           },
         },
-      })
-      setSoldDialogOpen(false)
-      onUpdate?.()
+      });
+      setSoldDialogOpen(false);
+      onUpdate?.();
     } catch (error) {
-      console.error("Failed to update post:", error)
+      console.error("Failed to update post:", error);
     } finally {
-      setIsUpdating(false)
+      setIsUpdating(false);
     }
-  }
+  };
 
   const handleMarkAsReserved = async () => {
-    setIsUpdating(true)
+    setIsUpdating(true);
     try {
       await forumsApi.posts.update(post.id, {
         extendedData: {
@@ -75,17 +81,17 @@ export function TradeActions({ post, isOwner, onUpdate, className }: TradeAction
             status: "RESERVED",
           },
         },
-      })
-      onUpdate?.()
+      });
+      onUpdate?.();
     } catch (error) {
-      console.error("Failed to update post:", error)
+      console.error("Failed to update post:", error);
     } finally {
-      setIsUpdating(false)
+      setIsUpdating(false);
     }
-  }
+  };
 
   const handleReactivate = async () => {
-    setIsUpdating(true)
+    setIsUpdating(true);
     try {
       await forumsApi.posts.update(post.id, {
         extendedData: {
@@ -94,14 +100,14 @@ export function TradeActions({ post, isOwner, onUpdate, className }: TradeAction
             status: "ACTIVE",
           },
         },
-      })
-      onUpdate?.()
+      });
+      onUpdate?.();
     } catch (error) {
-      console.error("Failed to update post:", error)
+      console.error("Failed to update post:", error);
     } finally {
-      setIsUpdating(false)
+      setIsUpdating(false);
     }
-  }
+  };
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
@@ -116,11 +122,20 @@ export function TradeActions({ post, isOwner, onUpdate, className }: TradeAction
       {/* Seller Actions */}
       {isOwner && trade.status === "ACTIVE" && (
         <>
-          <Button size="sm" variant="outline" onClick={handleMarkAsReserved} disabled={isUpdating}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleMarkAsReserved}
+            disabled={isUpdating}
+          >
             <Clock className="mr-1 h-4 w-4" />
             Mark Reserved
           </Button>
-          <Button size="sm" onClick={() => setSoldDialogOpen(true)} disabled={isUpdating}>
+          <Button
+            size="sm"
+            onClick={() => setSoldDialogOpen(true)}
+            disabled={isUpdating}
+          >
             <CheckCircle className="mr-1 h-4 w-4" />
             Mark as Sold
           </Button>
@@ -129,11 +144,20 @@ export function TradeActions({ post, isOwner, onUpdate, className }: TradeAction
 
       {isOwner && trade.status === "RESERVED" && (
         <>
-          <Button size="sm" variant="outline" onClick={handleReactivate} disabled={isUpdating}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleReactivate}
+            disabled={isUpdating}
+          >
             <XCircle className="mr-1 h-4 w-4" />
             Unreserve
           </Button>
-          <Button size="sm" onClick={() => setSoldDialogOpen(true)} disabled={isUpdating}>
+          <Button
+            size="sm"
+            onClick={() => setSoldDialogOpen(true)}
+            disabled={isUpdating}
+          >
             <CheckCircle className="mr-1 h-4 w-4" />
             Mark as Sold
           </Button>
@@ -141,7 +165,12 @@ export function TradeActions({ post, isOwner, onUpdate, className }: TradeAction
       )}
 
       {isOwner && (trade.status === "SOLD" || trade.status === "FULFILLED") && (
-        <Button size="sm" variant="outline" onClick={handleReactivate} disabled={isUpdating}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleReactivate}
+          disabled={isUpdating}
+        >
           Relist
         </Button>
       )}
@@ -152,7 +181,8 @@ export function TradeActions({ post, isOwner, onUpdate, className }: TradeAction
           <DialogHeader>
             <DialogTitle>Mark as Sold</DialogTitle>
             <DialogDescription>
-              Optionally enter the final agreed price. This helps improve market analytics.
+              Optionally enter the final agreed price. This helps improve market
+              analytics.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -177,5 +207,5 @@ export function TradeActions({ post, isOwner, onUpdate, className }: TradeAction
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

@@ -17,6 +17,7 @@ interface FeedStats {
 
 export default function HomePage() {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [stats, setStats] = useState<FeedStats>({
     activeToday: 0,
     newPosts: 0,
@@ -24,6 +25,12 @@ export default function HomePage() {
     trendingTags: [],
   });
   const [isLoading, setIsLoading] = useState(true);
+
+  // Check onboarding visibility on client side only
+  useEffect(() => {
+    const hidden = localStorage.getItem("hideOnboarding");
+    setShowOnboarding(!hidden);
+  }, []);
 
   const handlePostCreated = () => {
     setRefreshKey((prev) => prev + 1);
@@ -153,8 +160,42 @@ export default function HomePage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Feed */}
         <div className="lg:col-span-2">
-          {/* Post Composer */}
-          <HomePostComposer onPostCreated={handlePostCreated} />
+          {/* Onboarding Card - Dismissible */}
+          {showOnboarding && (
+            <div className="mb-6 rounded-xl border border-primary/20 bg-linear-to-r from-primary/5 to-primary/10 p-4 relative">
+              <button
+                onClick={() => {
+                  localStorage.setItem("hideOnboarding", "true");
+                  setShowOnboarding(false);
+                }}
+                className="absolute top-3 right-3 text-muted-foreground hover:text-foreground text-sm"
+              >
+                ✕
+              </button>
+              <h3 className="font-semibold mb-2 flex items-center gap-2">
+                🚀 How ONPOST Works
+              </h3>
+              <div className="grid gap-2 text-sm text-muted-foreground">
+                <div className="flex items-start gap-2">
+                  <span className="text-primary">1.</span>
+                  <span>
+                    <strong>Trade posts</strong> (WTS/WTB) form Markets
+                    automatically
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-primary">2.</span>
+                  <span>
+                    <strong>AI Analytics</strong> unlock after 10 valid trades
+                  </span>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground/70">
+                Markets emerge from real trades. AI only analyzes when data is
+                real.
+              </p>
+            </div>
+          )}
 
           {/* Feed */}
           <HomeFeed refreshKey={refreshKey} />

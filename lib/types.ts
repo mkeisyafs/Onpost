@@ -154,8 +154,18 @@ export interface AccountMarketSnapshot {
 
 export interface ThreadMarketData {
   marketEnabled: boolean;
-  marketTypeFinal: "ITEM_MARKET" | "ACCOUNT_MARKET" | null;
-  marketTypeCandidate: "ITEM_MARKET" | "ACCOUNT_MARKET" | "UNKNOWN";
+  marketTypeFinal:
+    | "ITEM_MARKET"
+    | "ACCOUNT_MARKET"
+    | "PHYSICAL_ITEM"
+    | "GENERAL"
+    | null;
+  marketTypeCandidate:
+    | "ITEM_MARKET"
+    | "ACCOUNT_MARKET"
+    | "PHYSICAL_ITEM"
+    | "GENERAL"
+    | "UNKNOWN";
   windowDays: number;
   thresholdValid: number;
   validCount: number;
@@ -187,6 +197,7 @@ export interface ThreadExtendedData {
   market?: ThreadMarketData;
   coverImage?: string;
   icon?: string;
+  category?: "game-items" | "accounts" | "physical" | "services";
 }
 
 // User Trust Data

@@ -15,9 +15,14 @@ import type { ForumsThread } from "@/lib/types";
 interface ThreadListProps {
   categoryId?: string;
   authorId?: string;
+  categoryFilter?: "game-items" | "accounts" | "physical" | "services" | null;
 }
 
-export function ThreadList({ categoryId, authorId }: ThreadListProps) {
+export function ThreadList({
+  categoryId,
+  authorId,
+  categoryFilter,
+}: ThreadListProps) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [allThreads, setAllThreads] = useState<ForumsThread[]>([]);
 
@@ -46,6 +51,13 @@ export function ThreadList({ categoryId, authorId }: ThreadListProps) {
     }
   }, [data, cursor]);
 
+  // Filter threads by category if categoryFilter is provided
+  const filteredThreads = categoryFilter
+    ? allThreads.filter(
+        (thread) => thread.extendedData?.category === categoryFilter
+      )
+    : allThreads;
+
   if (error) {
     return (
       <Card className="border-dashed">
@@ -59,7 +71,7 @@ export function ThreadList({ categoryId, authorId }: ThreadListProps) {
     );
   }
 
-  if (isLoading && allThreads.length === 0) {
+  if (isLoading && filteredThreads.length === 0) {
     return (
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {Array.from({ length: 8 }).map((_, i) => (
@@ -70,7 +82,7 @@ export function ThreadList({ categoryId, authorId }: ThreadListProps) {
   }
 
   // Active Empty State
-  if (allThreads.length === 0) {
+  if (filteredThreads.length === 0) {
     return (
       <div className="space-y-4">
         {/* CTA Card */}
@@ -93,22 +105,6 @@ export function ThreadList({ categoryId, authorId }: ThreadListProps) {
           </CardContent>
         </Card>
 
-        {/* Analytics Preview */}
-        <Card className="border-dashed opacity-75">
-          <CardContent className="py-6">
-            <div className="flex items-center gap-3 mb-4">
-              <TrendingUp className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Market Analytics</p>
-                <p className="text-sm text-muted-foreground">
-                  Unlocks at 50 listings
-                </p>
-              </div>
-            </div>
-            <Progress value={6} className="h-2" />
-            <p className="text-xs text-muted-foreground mt-2">3/50 listings</p>
-          </CardContent>
-        </Card>
 
         {/* Skeleton Preview Cards */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 opacity-30 pointer-events-none">
@@ -124,7 +120,7 @@ export function ThreadList({ categoryId, authorId }: ThreadListProps) {
     <div className="space-y-6">
       {/* Responsive Grid Layout - 1 to 4 columns */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {allThreads.map((thread) => (
+        {filteredThreads.map((thread) => (
           <ThreadCard key={thread.id} thread={thread} />
         ))}
       </div>

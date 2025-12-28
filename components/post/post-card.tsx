@@ -35,10 +35,11 @@ import { CommentModal } from "./comment-modal";
 
 interface PostCardProps {
   post: ForumsPost;
+  replies?: ForumsPost[];
   onUpdate?: () => void;
 }
 
-export function PostCard({ post, onUpdate }: PostCardProps) {
+export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
   const { user: currentUser, isAuthenticated } = useAuth();
   const [showActions, setShowActions] = useState(false);
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -106,7 +107,15 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   return (
     <>
       <div
-        className="group relative border-b border-border bg-card px-4 py-3 transition-colors hover:bg-muted/30"
+        className={`group relative border-b border-border px-4 py-3 transition-colors hover:bg-muted/30 ${
+          intent === "WTS"
+            ? "bg-green-500/5"
+            : intent === "WTB"
+            ? "bg-blue-500/5"
+            : intent === "WTT"
+            ? "bg-orange-500/5"
+            : "bg-card"
+        }`}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
@@ -134,6 +143,12 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
                 >
                   {postAuthor?.displayName || "Anonymous"}
                 </Link>
+                {/* Trust Badge */}
+                {postAuthor && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-600">
+                    🟡 New
+                  </span>
+                )}
                 {intent && (
                   <span
                     className={`px-2 py-0.5 text-xs font-bold rounded-full ${intentStyles[intent]}`}
@@ -167,7 +182,7 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem>
                     <MessageSquare className="mr-2 h-4 w-4" />
-                    Reply
+                   Comment
                   </DropdownMenuItem>
                   {isOwner && (
                     <>
@@ -212,17 +227,17 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
               {displayBody}
             </div>
 
-            {/* Image Grid - X/Facebook Style */}
+            {/* Image Grid - Full Width Style */}
             {images.length > 0 && (
               <div
-                className={`mt-3 grid gap-0.5 overflow-hidden rounded-2xl border border-border ${
+                className={`mt-3 overflow-hidden rounded-2xl border border-border ${
                   images.length === 1
-                    ? "grid-cols-1"
+                    ? ""
                     : images.length === 2
-                    ? "grid-cols-2"
+                    ? "grid grid-cols-2 gap-0.5"
                     : images.length === 3
-                    ? "grid-cols-2"
-                    : "grid-cols-2"
+                    ? "grid grid-cols-2 gap-0.5"
+                    : "grid grid-cols-2 gap-0.5"
                 }`}
               >
                 {images.slice(0, 4).map((img, index) => (
@@ -232,7 +247,7 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
                     onClick={() => setLightboxImage(img)}
                     className={`relative overflow-hidden bg-muted ${
                       images.length === 1
-                        ? "aspect-video"
+                        ? "w-full"
                         : images.length === 3 && index === 0
                         ? "row-span-2 aspect-square"
                         : "aspect-square"
@@ -243,7 +258,9 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
                       <img
                         src={img || "/placeholder.svg"}
                         alt={`Image ${index + 1}`}
-                        className="h-full w-full object-cover transition-transform hover:scale-105"
+                        className={`w-full object-cover transition-transform hover:scale-105 ${
+                          images.length === 1 ? "max-h-[500px]" : "h-full"
+                        }`}
                       />
                     ) : (
                       <Image
@@ -315,6 +332,67 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
                 <Share className="h-4 w-4" />
               </Button>
             </div>
+
+            {/* Replies/Comments Section */}
+            {/* {replies.length > 0 && (
+              <div className="mt-3 border-t border-border pt-3 space-y-3">
+                <p className="text-xs text-muted-foreground font-medium">
+                  {replies.length}{" "}
+                  {replies.length === 1 ? "comment" : "comments"}
+                </p>
+                {replies.slice(0, 3).map((reply) => {
+                  const replyAuthor = reply.author || reply.user;
+                  const replyAuthorId = reply.authorId || reply.userId || "";
+                  return (
+                    <div
+                      key={reply.id}
+                      className="flex gap-2 pl-2 border-l-2 border-muted"
+                    >
+                      <Link
+                        href={`/user/${replyAuthorId}`}
+                        className="shrink-0"
+                      >
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage
+                            src={replyAuthor?.avatarUrl || undefined}
+                            alt={replyAuthor?.displayName}
+                          />
+                          <AvatarFallback className="text-xs">
+                            {replyAuthor?.displayName
+                              ?.charAt(0)
+                              .toUpperCase() || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                      </Link>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Link
+                            href={`/user/${replyAuthorId}`}
+                            className="font-semibold text-foreground hover:underline"
+                          >
+                            {replyAuthor?.displayName || "Anonymous"}
+                          </Link>
+                          <span className="text-muted-foreground">·</span>
+                          <span className="text-muted-foreground">
+                            {formatDistanceToNow(new Date(reply.createdAt), {
+                              addSuffix: true,
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-foreground mt-0.5">
+                          {reply.body}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {replies.length > 3 && (
+                  <button className="text-xs text-primary hover:underline">
+                    View all {replies.length} comments
+                  </button>
+                )}
+              </div>
+            )} */}
           </div>
         </div>
       </div>

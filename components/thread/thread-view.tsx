@@ -131,7 +131,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
               {/* Posts Section Header */}
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-foreground">
-                  Replies
+                  Post
                   <span className="ml-2 text-sm font-normal text-muted-foreground">
                     ({postsData?.count ?? thread.postCount ?? 0})
                   </span>

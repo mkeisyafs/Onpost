@@ -1,17 +1,23 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Lock, Sparkles, RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import type { ThreadMarketData } from "@/lib/types"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Lock, Sparkles, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { ThreadMarketData } from "@/lib/types";
 
 interface InsightsPanelProps {
-  market: ThreadMarketData
+  market: ThreadMarketData;
 }
 
 export function InsightsPanel({ market }: InsightsPanelProps) {
-  const { analytics, validCount, thresholdValid } = market
-  const { locked, narrative, narrativeUpdatedAt } = analytics
+  const { analytics, validCount, thresholdValid } = market;
+  const { locked, narrative, narrativeUpdatedAt } = analytics;
 
   // Locked state
   if (locked) {
@@ -23,12 +29,12 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
             <CardTitle>AI Insights Locked</CardTitle>
           </div>
           <CardDescription>
-            Insights will be generated once the market has at least {thresholdValid} valid trade posts. Currently at{" "}
-            {validCount}.
+            Insights will be generated once the market has at least 10 valid
+            trade posts. Currently at {validCount}.
           </CardDescription>
         </CardHeader>
       </Card>
-    )
+    );
   }
 
   // No narrative yet
@@ -48,7 +54,7 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -65,7 +71,9 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
           </Button>
         </div>
         {narrativeUpdatedAt && (
-          <CardDescription>Last updated: {new Date(narrativeUpdatedAt).toLocaleString()}</CardDescription>
+          <CardDescription>
+            Last updated: {new Date(narrativeUpdatedAt).toLocaleString()}
+          </CardDescription>
         )}
       </CardHeader>
       <CardContent>
@@ -75,11 +83,14 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
 
         {/* Key Takeaways */}
         <div className="mt-6 space-y-3">
-          <h4 className="text-sm font-semibold text-foreground">Key Takeaways</h4>
+          <h4 className="text-sm font-semibold text-foreground">
+            Key Takeaways
+          </h4>
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              Market data is based on {validCount} validated trade posts from the last {market.windowDays} days
+              Market data is based on {validCount} validated trade posts from
+              the last {market.windowDays} days
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
@@ -93,5 +104,5 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Home,
@@ -12,10 +12,15 @@ import {
   Users,
   Flame,
   Plus,
+  Package,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "@/lib/auth-context";
+import { AuthModal } from "@/components/auth/auth-modal";
 import forumsApi from "@/lib/forums-api";
 import type { ForumsThread } from "@/lib/types";
 
@@ -24,6 +29,7 @@ const navigation = [
   { name: "Market Analytics", href: "/markets", icon: TrendingUp },
   { name: "Game Items", href: "/markets?category=game-items", icon: Gamepad2 },
   { name: "Accounts", href: "/markets?category=accounts", icon: Users },
+  { name: "Physical Items", href: "/markets?category=physical", icon: Package },
   { name: "Services", href: "/markets?category=services", icon: ShoppingBag },
 ];
 
@@ -36,9 +42,16 @@ interface HotMarket {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentCategory = searchParams.get("category");
+  const { user, isAuthenticated, logout } = useAuth();
   const [hotMarkets, setHotMarkets] = useState<HotMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [wtbCount, setWtbCount] = useState(0);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<"signin" | "signup">(
+    "signin"
+  );
 
   // Fetch real hot markets data from threads
   useEffect(() => {
@@ -114,17 +127,30 @@ export function Sidebar() {
         <Button asChild className="w-full rounded-full gap-2" size="lg">
           <Link href="/thread/new">
             <Plus className="h-4 w-4" />
-            Create Post
+            Create Thread{" "}
           </Link>
         </Button>
 
         {/* Main Navigation */}
         <nav className="flex flex-col gap-1">
           {navigation.map((item) => {
-            const isActive =
-              pathname === item.href ||
-              (item.href !== "/" &&
-                pathname.startsWith(item.href.split("?")[0]));
+            // Precise URL matching including query params
+            let isActive = false;
+            if (item.href === "/") {
+              // Home: only active when exactly at "/"
+              isActive = pathname === "/";
+            } else if (item.href === "/markets") {
+              // Market Analytics: active only when at /markets without category query
+              isActive = pathname === "/markets" && !currentCategory;
+            } else if (item.href.includes("?category=")) {
+              // Category links: active when path + category param matches
+              const category = item.href.split("category=")[1];
+              isActive =
+                pathname === "/markets" && currentCategory === category;
+            } else {
+              isActive =
+                pathname === item.href || pathname.startsWith(item.href);
+            }
             return (
               <Link
                 key={item.name}
@@ -200,10 +226,70 @@ export function Sidebar() {
           </div>
         )}
 
-        {/* Footer */}
-        <div className="mt-auto border-t border-border pt-4 text-xs text-muted-foreground">
-          <p className="font-medium">ONPOST Marketplace</p>
-          <p className="mt-0.5 text-[11px]">AI-Powered Trading Platform</p>
+        {/* Footer - User Profile */}
+        <div className="mt-auto border-t border-border pt-4">
+          {isAuthenticated && user ? (
+            <div className="flex items-center gap-3">
+              <Link href={`/user/${user.id}`}>
+                <Avatar className="h-9 w-9">
+                  <AvatarImage
+                    src={user.avatarUrl || undefined}
+                    alt={user.displayName}
+                  />
+                  <AvatarFallback>
+                    {user.displayName?.charAt(0).toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+              </Link>
+              <div className="flex-1 min-w-0">
+                <Link
+                  href={`/user/${user.id}`}
+                  className="font-medium text-sm text-foreground hover:underline truncate block"
+                >
+                  {user.displayName || user.username}
+                </Link>
+                <p className="text-xs text-muted-foreground truncate">
+                  @{user.username}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={logout}
+                className="h-8 w-8 shrink-0"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Button
+                  className="w-full"
+                  size="sm"
+                  onClick={() => setAuthModalOpen(true)}
+                >
+                  Sign In
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  size="sm"
+                  onClick={() => {
+                    setAuthModalTab("signup");
+                    setAuthModalOpen(true);
+                  }}
+                >
+                  Sign Up
+                </Button>
+              </div>
+              <AuthModal
+                open={authModalOpen}
+                onOpenChange={setAuthModalOpen}
+                defaultTab={authModalTab}
+              />
+            </>
+          )}
         </div>
       </div>
     </aside>

@@ -174,7 +174,7 @@ export function ThreadHeader({ thread, postCount }: ThreadHeaderProps) {
                 {postCount ?? thread.postCount ?? 0}
               </span>
               <span className="text-xs flex items-center gap-1">
-                <MessageSquare className="h-3 w-3" /> replies
+                <MessageSquare className="h-3 w-3" /> Post
               </span>
             </div>
           </div>
@@ -202,10 +202,6 @@ export function ThreadHeader({ thread, postCount }: ThreadHeaderProps) {
 
         {/* Bottom Actions */}
         <div className="mt-6 pt-4 border-t border-border flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="rounded-full gap-2">
-            <Heart className="h-4 w-4" />
-            Like
-          </Button>
 
           {isOwner && (
             <Button

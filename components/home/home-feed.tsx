@@ -56,14 +56,16 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
               filter: "newest",
             });
             if (postsResponse.posts) {
-              // Add thread info to each post for display
-              const postsWithThread = postsResponse.posts.map((post) => ({
-                ...post,
-                _threadTitle: thread.title,
-                _threadId: thread.id,
-                _threadViewCount: thread.viewCount || 0,
-                _threadPostCount: thread.postCount || 0,
-              }));
+              // Filter out replies (posts with parentId) and add thread info to each post for display
+              const postsWithThread = postsResponse.posts
+                .filter((post) => !post.parentId && !post.parentPostId)
+                .map((post) => ({
+                  ...post,
+                  _threadTitle: thread.title,
+                  _threadId: thread.id,
+                  _threadViewCount: thread.viewCount || 0,
+                  _threadPostCount: thread.postCount || 0,
+                }));
               allPosts.push(...postsWithThread);
             }
           } catch {
@@ -244,8 +246,8 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
         {/* Images */}
         {images.length > 0 && (
           <div
-            className={`mt-3 grid gap-1 rounded-xl overflow-hidden ${
-              images.length === 1 ? "grid-cols-1" : "grid-cols-2"
+            className={`mt-3 rounded-xl overflow-hidden border border-border ${
+              images.length === 1 ? "" : "grid grid-cols-2 gap-0.5"
             }`}
           >
             {images.slice(0, 4).map((img, idx) => (
@@ -254,7 +256,7 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
                 src={img}
                 alt=""
                 className={`w-full object-cover ${
-                  images.length === 1 ? "max-h-96" : "h-48"
+                  images.length === 1 ? "max-h-[500px]" : "h-48"
                 }`}
               />
             ))}

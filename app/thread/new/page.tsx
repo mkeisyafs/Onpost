@@ -45,6 +45,9 @@ export default function NewThreadPage() {
   const [body, setBody] = useState("");
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [enableMarket, setEnableMarket] = useState(false);
+  const [marketCategory, setMarketCategory] = useState<
+    "ITEM_MARKET" | "ACCOUNT_MARKET" | "PHYSICAL_ITEM" | "GENERAL"
+  >("ITEM_MARKET");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverImage, setCoverImage] = useState<{
@@ -57,6 +60,44 @@ export default function NewThreadPage() {
 
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(true);
+  const [threadCategory, setThreadCategory] = useState<
+    "game-items" | "accounts" | "physical" | "services"
+  >("game-items");
+
+  // Thread categories for filtering
+  const threadCategories = [
+    { value: "game-items", label: "Game Items", icon: "🎮" },
+    { value: "accounts", label: "Accounts", icon: "👤" },
+    { value: "physical", label: "Physical Items", icon: "📦" },
+    { value: "services", label: "Services", icon: "🛒" },
+  ] as const;
+
+  const marketCategories = [
+    {
+      value: "ITEM_MARKET",
+      label: "Game Items",
+      desc: "In-game items, currency, materials",
+      icon: "🎮",
+    },
+    {
+      value: "ACCOUNT_MARKET",
+      label: "Game Accounts",
+      desc: "Full accounts, characters, profiles",
+      icon: "👤",
+    },
+    {
+      value: "PHYSICAL_ITEM",
+      label: "Physical Items",
+      desc: "Electronics, fashion, collectibles",
+      icon: "📦",
+    },
+    {
+      value: "GENERAL",
+      label: "General",
+      desc: "Services, other items",
+      icon: "🛒",
+    },
+  ];
 
   useEffect(() => {
     async function fetchMeta() {
@@ -180,10 +221,10 @@ export default function NewThreadPage() {
       const marketData: ThreadMarketData | undefined = enableMarket
         ? {
             marketEnabled: true,
-            marketTypeFinal: null,
-            marketTypeCandidate: "UNKNOWN",
+            marketTypeFinal: marketCategory,
+            marketTypeCandidate: marketCategory,
             windowDays: 14,
-            thresholdValid: 50,
+            thresholdValid: 10,
             validCount: 0,
             lastWindowCutoffAt: 0,
             lastProcessed: {
@@ -210,7 +251,9 @@ export default function NewThreadPage() {
           }
         : undefined;
 
-      const extendedData: ThreadExtendedData = {};
+      const extendedData: ThreadExtendedData = {
+        category: threadCategory,
+      };
       if (marketData) extendedData.market = marketData;
       if (coverImageBase64) extendedData.coverImage = coverImageBase64;
       if (iconBase64) extendedData.icon = iconBase64;
@@ -374,6 +417,31 @@ export default function NewThreadPage() {
               />
             </div>
 
+            {/* Category Selector */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <TagIcon className="h-4 w-4 text-muted-foreground" />
+                Category
+              </Label>
+              <div className="grid grid-cols-4 gap-2">
+                {threadCategories.map((cat) => (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => setThreadCategory(cat.value)}
+                    className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-center transition-all ${
+                      threadCategory === cat.value
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/50 hover:bg-muted/50"
+                    }`}
+                  >
+                    <span className="text-xl">{cat.icon}</span>
+                    <p className="font-medium text-xs">{cat.label}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Tags */}
             {availableTags.length > 0 && (
               <div className="space-y-3">
@@ -438,6 +506,40 @@ export default function NewThreadPage() {
                 onCheckedChange={setEnableMarket}
               />
             </div>
+
+            {/* Market Category Selector - Show only when market is enabled */}
+            {enableMarket && (
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2">
+                  <TagIcon className="h-4 w-4 text-muted-foreground" />
+                  Market Category
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {marketCategories.map((cat) => (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() =>
+                        setMarketCategory(cat.value as typeof marketCategory)
+                      }
+                      className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
+                        marketCategory === cat.value
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/50 hover:bg-muted/50"
+                      }`}
+                    >
+                      <span className="text-xl">{cat.icon}</span>
+                      <div>
+                        <p className="font-medium text-sm">{cat.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {cat.desc}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {error && (
               <Alert variant="destructive">

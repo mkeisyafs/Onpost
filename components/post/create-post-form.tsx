@@ -153,6 +153,39 @@ export function CreatePostForm({
           Object.keys(extendedData).length > 0 ? extendedData : undefined,
       });
 
+      // If this is a trade post (WTS/WTB/WTT), update the thread's validCount
+      const isTradePost = selectedTag !== null || detectedTrade !== null;
+      if (isTradePost) {
+        try {
+          // Fetch current thread to get market data
+          const thread = await forumsApi.threads.get(threadId);
+          if (thread.extendedData?.market) {
+            const currentMarket = thread.extendedData.market;
+            const newValidCount = (currentMarket.validCount || 0) + 1;
+
+            // Update thread with incremented validCount
+            await forumsApi.threads.update(threadId, {
+              extendedData: {
+                ...thread.extendedData,
+                market: {
+                  ...currentMarket,
+                  validCount: newValidCount,
+                  // Check if threshold met and unlock analytics
+                  analytics: {
+                    ...currentMarket.analytics,
+                    locked:
+                      newValidCount < (currentMarket.thresholdValid || 10),
+                  },
+                },
+              },
+            });
+          }
+        } catch (err) {
+          console.error("Failed to update trade count:", err);
+          // Don't fail the post creation even if count update fails
+        }
+      }
+
       // Cleanup
       images.forEach((img) => URL.revokeObjectURL(img.url));
       setBody("");
@@ -171,7 +204,7 @@ export function CreatePostForm({
     return (
       <Card className="border-border/50">
         <CardContent className="py-8 text-center text-muted-foreground">
-          <p>Please log in to reply to this thread.</p>
+          <p>Please log in to post to this thread.</p>
         </CardContent>
       </Card>
     );

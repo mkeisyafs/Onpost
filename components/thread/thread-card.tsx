@@ -132,12 +132,6 @@ export function ThreadCard({ thread }: ThreadCardProps) {
             Market
           </Badge>
         )}
-        {market?.marketEnabled && market.analytics.locked && !intent && (
-          <Badge className="absolute top-3 left-3 bg-muted/90 border-0 shadow-lg">
-            <Lock className="mr-1 h-3 w-3" />
-            {market.validCount}/{market.thresholdValid}
-          </Badge>
-        )}
 
         {/* Thread Icon */}
         <div className="absolute -bottom-5 left-4">
