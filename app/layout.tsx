@@ -6,6 +6,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { AuthProvider } from "@/lib/auth-context";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
+import { MobileNavWrapper } from "@/components/layout/mobile-nav";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
@@ -80,9 +81,10 @@ export default function RootLayout({
                 <Suspense fallback={<SidebarSkeleton />}>
                   <Sidebar />
                 </Suspense>
-                <main className="flex-1">{children}</main>
+                <main className="flex-1 pb-16 lg:pb-0">{children}</main>
               </div>
             </div>
+            <MobileNavWrapper />
           </AuthProvider>
         </ThemeProvider>
         <Analytics />

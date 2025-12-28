@@ -32,7 +32,9 @@ import type {
 } from "@/lib/assistant-utils";
 import { CommentModal } from "@/components/post/comment-modal";
 import forumsApi from "@/lib/forums-api";
+import { useAuth } from "@/lib/auth-context";
 import type { ForumsPost } from "@/lib/types";
+import Link from "next/link";
 
 // ============================================
 // Types
@@ -62,6 +64,7 @@ export function AIMarketAssistant() {
   const [selectedPost, setSelectedPost] = useState<ForumsPost | null>(null);
   const [isLoadingPost, setIsLoadingPost] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { isAuthenticated } = useAuth();
 
   // Load messages from localStorage on mount
   useEffect(() => {
@@ -309,28 +312,42 @@ export function AIMarketAssistant() {
             )}
           </ScrollArea>
 
-          {/* Input */}
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about prices, listings..."
-              disabled={isLoading}
-              className="text-sm h-9"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={isLoading || !input.trim()}
-              className="h-9 w-9 shrink-0"
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </form>
+          {/* Input - Requires Sign In */}
+          {isAuthenticated ? (
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about prices, listings..."
+                disabled={isLoading}
+                className="text-sm h-9"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={isLoading || !input.trim()}
+                className="h-9 w-9 shrink-0"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </form>
+          ) : (
+            <div className="text-center py-2 px-3 rounded-lg bg-muted/50 border border-border">
+              <p className="text-sm text-muted-foreground mb-2">
+                Sign in to use AI Assistant
+              </p>
+              <Link
+                href="/login"
+                className="text-sm text-primary hover:underline font-medium"
+              >
+                Sign In →
+              </Link>
+            </div>
+          )}
         </CardContent>
       </Card>
 

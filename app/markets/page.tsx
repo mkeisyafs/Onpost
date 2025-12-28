@@ -122,6 +122,65 @@ function MarketsContent() {
             </>
           )}
         </div>
+
+        {/* Mobile Category Filters */}
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-2 lg:hidden scrollbar-hide">
+          <a
+            href="/markets"
+            className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !categoryFilter
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            <TrendingUp className="h-4 w-4" />
+            All Markets
+          </a>
+          <a
+            href="/markets?category=game-items"
+            className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              categoryFilter === "game-items"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            <Gamepad2 className="h-4 w-4" />
+            Game Items
+          </a>
+          <a
+            href="/markets?category=accounts"
+            className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              categoryFilter === "accounts"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            Accounts
+          </a>
+          <a
+            href="/markets?category=physical"
+            className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              categoryFilter === "physical"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            <Package className="h-4 w-4" />
+            Physical Items
+          </a>
+          <a
+            href="/markets?category=services"
+            className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              categoryFilter === "services"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            <ShoppingBag className="h-4 w-4" />
+            Services
+          </a>
+        </div>
       </div>
 
       {/* Info Banner */}
