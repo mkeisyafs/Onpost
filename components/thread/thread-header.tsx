@@ -41,9 +41,11 @@ export function ThreadHeader({ thread, postCount }: ThreadHeaderProps) {
   const threadIcon = thread.extendedData?.icon;
 
   return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-      {/* Cover Image */}
-      <div className="relative aspect-[3/1] w-full overflow-hidden bg-gradient-to-br from-primary/20 via-primary/10 to-muted">
+  <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+    {/* Cover Image */}
+    <div className="relative aspect-[3/1] w-full overflow-visible bg-gradient-to-br from-primary/20 via-primary/10 to-muted">
+      {/* Inner cover that clips ONLY the image */}
+      <div className="absolute inset-0 overflow-hidden">
         {coverImage ? (
           <img
             src={coverImage}
@@ -58,67 +60,69 @@ export function ThreadHeader({ thread, postCount }: ThreadHeaderProps) {
 
         {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+      </div>
 
-        {/* Thread Icon - Positioned on bottom of cover */}
-        <div className="absolute -bottom-8 left-6">
-          <div className="relative h-20 w-20 rounded-2xl overflow-hidden border-4 border-card bg-muted shadow-xl">
-            {threadIcon ? (
-              <img
-                src={threadIcon}
-                alt="Thread icon"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-                <span className="text-2xl font-bold text-primary">
-                  {thread.title.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Action buttons on cover */}
-        <div className="absolute top-4 right-4 flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white border-0"
-          >
-            <Share2 className="h-4 w-4 mr-1" />
-            Share
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="secondary"
-                size="icon"
-                className="h-8 w-8 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white border-0"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {isOwner && (
-                <>
-                  <DropdownMenuItem asChild>
-                    <Link href={`/thread/${thread.id}/edit`}>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit Thread
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              <DropdownMenuItem>
-                <Flag className="mr-2 h-4 w-4" />
-                Report
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      {/* Thread Icon - now safe (not clipped) */}
+      <div className="absolute -bottom-8 left-6 z-30">
+        <div className="h-20 w-20 rounded-2xl overflow-hidden border-4 border-card bg-muted shadow-xl">
+          {threadIcon ? (
+            <img
+              src={threadIcon}
+              alt="Thread icon"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+              <span className="text-2xl font-bold text-primary">
+                {thread.title.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Action buttons on cover */}
+      <div className="absolute top-4 right-4 z-40 flex gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white border-0"
+        >
+          <Share2 className="h-4 w-4 mr-1" />
+          Share
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-8 w-8 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white border-0"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {isOwner && (
+              <>
+                <DropdownMenuItem asChild>
+                  <Link href={`/thread/${thread.id}/edit`}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Thread
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem>
+              <Flag className="mr-2 h-4 w-4" />
+              Report
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+    
       <div className="p-6 pt-12">
         {/* Title & Author Row */}
         <div className="flex items-start justify-between gap-4">

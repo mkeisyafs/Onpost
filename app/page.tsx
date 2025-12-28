@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { HomePostComposer } from "@/components/home/home-post-composer";
 import { HomeFeed } from "@/components/home/home-feed";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";

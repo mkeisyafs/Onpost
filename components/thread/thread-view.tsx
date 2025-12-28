@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import forumsApi from "@/lib/forums-api";
 import { ThreadHeader } from "./thread-header";
@@ -12,6 +12,12 @@ import { ThreadSkeleton } from "./thread-skeleton";
 import { CreatePostForm } from "@/components/post/create-post-form";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Plus, X, ChevronUp } from "lucide-react";
 import Link from "next/link";
 
@@ -27,7 +33,6 @@ export function ThreadView({ threadId }: ThreadViewProps) {
   const [showPostForm, setShowPostForm] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const { isAuthenticated } = useAuth();
-  const postFormRef = useRef<HTMLDivElement>(null);
 
   const {
     data: thread,
@@ -65,12 +70,6 @@ export function ThreadView({ threadId }: ThreadViewProps) {
       return;
     }
     setShowPostForm(true);
-    setTimeout(() => {
-      postFormRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }, 100);
   };
 
   const scrollToTop = () => {
@@ -160,32 +159,6 @@ export function ThreadView({ threadId }: ThreadViewProps) {
               <div className="rounded-xl border border-border bg-card overflow-hidden">
                 <PostList threadId={threadId} key={refreshKey} />
               </div>
-
-              {/* Create Post Form */}
-              {isAuthenticated && !isLocked && showPostForm && (
-                <div
-                  ref={postFormRef}
-                  className="animate-in slide-in-from-bottom-4 duration-300"
-                >
-                  <div className="rounded-xl border border-primary/30 bg-card p-4 shadow-lg">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold">Write a Reply</h3>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-full"
-                        onClick={() => setShowPostForm(false)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <CreatePostForm
-                      threadId={threadId}
-                      onPostCreated={handlePostCreated}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -213,7 +186,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
         )}
 
         {/* New Post FAB */}
-        {isAuthenticated && !isLocked && !showPostForm && (
+        {isAuthenticated && !isLocked && (
           <Button
             onClick={handleFABClick}
             size="icon"
@@ -236,6 +209,19 @@ export function ThreadView({ threadId }: ThreadViewProps) {
           </Button>
         )}
       </div>
+
+      {/* Create Post Modal */}
+      <Dialog open={showPostForm} onOpenChange={setShowPostForm}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Post</DialogTitle>
+          </DialogHeader>
+          <CreatePostForm
+            threadId={threadId}
+            onPostCreated={handlePostCreated}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

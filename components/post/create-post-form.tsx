@@ -27,7 +27,7 @@ export function CreatePostForm({
 }: CreatePostFormProps) {
   const { user, isAuthenticated } = useAuth();
   const [body, setBody] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);  
   const [error, setError] = useState<string | null>(null);
   const [detectedTrade, setDetectedTrade] = useState<ReturnType<
     typeof createTradeData

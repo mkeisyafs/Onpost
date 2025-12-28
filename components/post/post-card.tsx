@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
@@ -13,7 +13,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { TradeBadge } from "./trade-badge";
 import { PriceDisplay } from "./price-display";
 import { TradeActions } from "./trade-actions";
@@ -27,11 +45,14 @@ import {
   Repeat2,
   Share,
   X,
+  Loader2,
+  ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import forumsApi from "@/lib/forums-api";
 import type { ForumsPost } from "@/lib/types";
 import { CommentModal } from "./comment-modal";
+import { cn } from "@/lib/utils";
 
 interface PostCardProps {
   post: ForumsPost;
@@ -45,22 +66,153 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  // Normalize author data (API may use either userId/user or authorId/author)
+  // Edit & Delete states
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [editBody, setEditBody] = useState(post.body);
+  const [editImages, setEditImages] = useState<
+    { url: string; file?: File; isExisting?: boolean }[]
+  >([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+
   const postAuthorId = post.authorId || post.userId || "";
   const postAuthor = post.author || post.user;
 
-  // Initialize like state from post data
   const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
   const [isLiked, setIsLiked] = useState(
     post.likes?.some((like) => like.userId === currentUser?.id) || false
   );
   const [isLiking, setIsLiking] = useState(false);
 
+  // Handle Edit Post
+  const handleEdit = async () => {
+    if (!editBody.trim() && editImages.length === 0) return;
+    if (isEditing) return;
+
+    setIsEditing(true);
+    try {
+      // Compress and convert new images to base64
+      const compressImage = async (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const img = document.createElement("img");
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          img.onload = () => {
+            const MAX_WIDTH = 1024;
+            const MAX_HEIGHT = 1024;
+            let { width, height } = img;
+
+            if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+              const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx?.drawImage(img, 0, 0, width, height);
+            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+            resolve(compressedBase64);
+          };
+
+          img.onerror = () => reject(new Error("Failed to load image"));
+          img.src = URL.createObjectURL(file);
+        });
+      };
+
+      const imageUrls = await Promise.all(
+        editImages.map(async (img) => {
+          if (img.file) {
+            return compressImage(img.file);
+          }
+          return img.url;
+        })
+      );
+
+      await forumsApi.posts.update(post.id, {
+        body: editBody,
+        extendedData: {
+          ...post.extendedData,
+          images: imageUrls.length > 0 ? imageUrls : undefined,
+        },
+      });
+      setShowEditDialog(false);
+      onUpdate?.();
+    } catch (error) {
+      console.error("Failed to edit post:", error);
+      alert("Failed to edit post. Please try again.");
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
+  // Handle Edit Image Selection
+  const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file) => {
+      if (file.type.startsWith("image/")) {
+        const url = URL.createObjectURL(file);
+        setEditImages((prev) => [...prev, { url, file }]);
+      }
+    });
+
+    if (editFileInputRef.current) {
+      editFileInputRef.current.value = "";
+    }
+  };
+
+  // Remove Edit Image
+  const removeEditImage = (index: number) => {
+    setEditImages((prev) => {
+      const newImages = [...prev];
+      if (!newImages[index].isExisting) {
+        URL.revokeObjectURL(newImages[index].url);
+      }
+      newImages.splice(index, 1);
+      return newImages;
+    });
+  };
+
+  // Initialize edit images when opening edit dialog
+  const openEditDialog = () => {
+    setEditBody(post.body);
+    // Load existing images
+    const existingImages = (post.extendedData?.images || []).map(
+      (url: string) => ({
+        url,
+        isExisting: true,
+      })
+    );
+    setEditImages(existingImages);
+    setShowEditDialog(true);
+  };
+
+  // Handle Delete Post
+  const handleDelete = async () => {
+    if (isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      await forumsApi.posts.delete(post.id);
+      setShowDeleteDialog(false);
+      onUpdate?.();
+    } catch (error) {
+      console.error("Failed to delete post:", error);
+      alert("Failed to delete post. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const trade = post.extendedData?.trade;
   const images = post.extendedData?.images || [];
   const isOwner = currentUser?.id === postAuthorId;
 
-  // Detect intent tag from body
   const detectIntent = (text: string): "WTS" | "WTB" | "WTT" | null => {
     const upper = text.toUpperCase();
     if (upper.includes("#WTS")) return "WTS";
@@ -71,18 +223,22 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
   const intent = detectIntent(post.body);
 
   const intentStyles: Record<string, string> = {
-    WTS: "bg-green-500 text-white",
-    WTB: "bg-yellow-500 text-black",
-    WTT: "bg-orange-500 text-white",
+    WTS: "bg-green-500 text-white shadow-lg shadow-green-500/25",
+    WTB: "bg-yellow-500 text-black shadow-lg shadow-yellow-500/25",
+    WTT: "bg-orange-500 text-white shadow-lg shadow-orange-500/25",
   };
 
-  // Remove image placeholders and trade tags from body for display
+  const intentBgStyles: Record<string, string> = {
+    WTS: "bg-green-500/5 border-green-500/20",
+    WTB: "bg-blue-500/5 border-blue-500/20",
+    WTT: "bg-orange-500/5 border-orange-500/20",
+  };
+
   const displayBody = post.body
     .replace(/\n\n\[Image \d+\]\s*/g, "")
     .replace(/#(WTS|WTB|WTT)\s*/gi, "")
     .trim();
 
-  // Handle like toggle
   const handleLike = async () => {
     if (!isAuthenticated || isLiking) return;
 
@@ -107,292 +263,268 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
   return (
     <>
       <div
-        className={`group relative border-b border-border px-4 py-3 transition-colors hover:bg-muted/30 ${
-          intent === "WTS"
-            ? "bg-green-500/5"
-            : intent === "WTB"
-            ? "bg-blue-500/5"
-            : intent === "WTT"
-            ? "bg-orange-500/5"
-            : "bg-card"
-        }`}
+        className={cn(
+          "group relative rounded-2xl border border-border bg-card transition-all duration-300 hover:shadow-lg",
+          intentBgStyles[intent || ""] || ""
+        )}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
-        <div className="flex gap-3">
-          {/* Author Avatar */}
-          <Link href={`/user/${postAuthorId}`} className="shrink-0">
-            <Avatar className="h-10 w-10">
-              <AvatarImage
-                src={postAuthor?.avatarUrl || undefined}
-                alt={postAuthor?.displayName}
-              />
-              <AvatarFallback>
-                {postAuthor?.displayName?.charAt(0).toUpperCase() || "?"}
-              </AvatarFallback>
-            </Avatar>
-          </Link>
+        <div className="p-4">
+          <div className="flex gap-3">
+            {/* Author Avatar */}
+            <Link href={`/user/${postAuthorId}`} className="shrink-0 relative">
+              <Avatar className="h-10 w-10 border-2 border-primary/20">
+                <AvatarImage
+                  src={postAuthor?.avatarUrl || undefined}
+                  alt={postAuthor?.displayName}
+                />
+                <AvatarFallback className="bg-linear-to-br from-primary to-accent text-primary-foreground font-bold">
+                  {postAuthor?.displayName?.charAt(0).toUpperCase() || "?"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="absolute top-10 left-1/2 -translate-x-1/2 w-px h-3 bg-primary/30" />
+            </Link>
 
-          <div className="min-w-0 flex-1">
-            {/* Author & Time Row */}
-            <div className="flex items-start justify-between">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Link
-                  href={`/user/${postAuthorId}`}
-                  className="font-semibold text-foreground hover:underline"
-                >
-                  {postAuthor?.displayName || "Anonymous"}
-                </Link>
-                {/* Trust Badge */}
-                {postAuthor && (
-                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-600">
-                    🟡 New
-                  </span>
-                )}
-                {intent && (
-                  <span
-                    className={`px-2 py-0.5 text-xs font-bold rounded-full ${intentStyles[intent]}`}
+            <div className="min-w-0 flex-1">
+              {/* Author & Time Row */}
+              <div className="flex items-start justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/user/${postAuthorId}`}
+                    className="font-semibold text-foreground hover:text-primary transition-colors"
                   >
-                    {intent}
-                  </span>
-                )}
-                <span className="text-muted-foreground">·</span>
-                <span className="text-sm text-muted-foreground hover:underline">
-                  {formatDistanceToNow(new Date(post.createdAt), {
-                    addSuffix: true,
-                  })}
-                </span>
-              </div>
+                    {postAuthor?.displayName || "Anonymous"}
+                  </Link>
 
-              {/* More Options */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-8 w-8 rounded-full transition-opacity ${
-                      showActions
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100"
-                    }`}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem>
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                   Comment
-                  </DropdownMenuItem>
-                  {isOwner && (
-                    <>
-                      <DropdownMenuItem>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive">
-                        <Trash className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </>
+                  {postAuthor && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-600 border border-yellow-500/20">
+                      New
+                    </span>
                   )}
-                  {!isOwner && (
-                    <DropdownMenuItem>
-                      <Flag className="mr-2 h-4 w-4" />
-                      Report
+
+                  {intent && (
+                    <span
+                      className={cn(
+                        "px-2.5 py-0.5 text-xs font-bold rounded-full",
+                        intentStyles[intent]
+                      )}
+                    >
+                      {intent}
+                    </span>
+                  )}
+
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    {formatDistanceToNow(new Date(post.createdAt), {
+                      addSuffix: true,
+                    })}
+                  </span>
+                </div>
+
+                {/* More Options */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-8 w-8 rounded-full transition-all",
+                        showActions
+                          ? "opacity-100"
+                          : "opacity-0 group-hover:opacity-100"
+                      )}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-48 rounded-lg border-border bg-card p-1"
+                  >
+                    <DropdownMenuItem className="rounded-md focus:bg-muted">
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Comment
                     </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            {/* Trade Badge */}
-            {trade?.isTrade && (
-              <div className="mt-1 flex items-center gap-2">
-                <TradeBadge intent={trade.intent} status={trade.status} />
-                {trade.normalizedPrice !== null && (
-                  <PriceDisplay
-                    price={trade.normalizedPrice}
-                    displayPrice={trade.displayPrice}
-                    currency={trade.currency}
-                    status={trade.status}
-                  />
-                )}
+                    {isOwner && (
+                      <>
+                        <DropdownMenuItem
+                          className="rounded-md focus:bg-muted"
+                          onClick={openEditDialog}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-border" />
+                        <DropdownMenuItem
+                          className="text-destructive rounded-md focus:bg-destructive/10"
+                          onClick={() => setShowDeleteDialog(true)}
+                        >
+                          <Trash className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {!isOwner && (
+                      <DropdownMenuItem className="rounded-md focus:bg-muted">
+                        <Flag className="mr-2 h-4 w-4" />
+                        Report
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-            )}
 
-            {/* Post Body */}
-            <div className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
-              {displayBody}
-            </div>
+              {/* Trade Badge */}
+              {trade?.isTrade && (
+                <div className="mt-2 flex items-center gap-3">
+                  <TradeBadge intent={trade.intent} status={trade.status} />
+                  {trade.normalizedPrice !== null && (
+                    <PriceDisplay
+                      price={trade.normalizedPrice}
+                      displayPrice={trade.displayPrice}
+                      currency={trade.currency}
+                      status={trade.status}
+                    />
+                  )}
+                </div>
+              )}
 
-            {/* Image Grid - Full Width Style */}
-            {images.length > 0 && (
-              <div
-                className={`mt-3 overflow-hidden rounded-2xl border border-border ${
-                  images.length === 1
-                    ? ""
-                    : images.length === 2
-                    ? "grid grid-cols-2 gap-0.5"
-                    : images.length === 3
-                    ? "grid grid-cols-2 gap-0.5"
-                    : "grid grid-cols-2 gap-0.5"
-                }`}
-              >
-                {images.slice(0, 4).map((img, index) => (
+              {/* Post Body */}
+              <div className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
+                {displayBody}
+              </div>
+
+              {/* Image Grid - Facebook Style */}
+              {images.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {/* Main Image - Full width, maintains aspect ratio */}
                   <button
-                    key={index}
                     type="button"
-                    onClick={() => setLightboxImage(img)}
-                    className={`relative overflow-hidden bg-muted ${
-                      images.length === 1
-                        ? "w-full"
-                        : images.length === 3 && index === 0
-                        ? "row-span-2 aspect-square"
-                        : "aspect-square"
-                    }`}
+                    onClick={() => setLightboxImage(images[0])}
+                    className="relative w-full overflow-hidden rounded-xl border border-border bg-muted/50 transition-all duration-300 hover:brightness-95"
                   >
-                    {img.startsWith("data:") ? (
-                      // Base64 image
+                    {images[0].startsWith("data:") ? (
                       <img
-                        src={img || "/placeholder.svg"}
-                        alt={`Image ${index + 1}`}
-                        className={`w-full object-cover transition-transform hover:scale-105 ${
-                          images.length === 1 ? "max-h-[500px]" : "h-full"
-                        }`}
+                        src={images[0] || "/placeholder.svg"}
+                        alt="Image 1"
+                        className="w-full max-h-[500px] object-contain"
                       />
                     ) : (
-                      <Image
-                        src={img || "/placeholder.svg"}
-                        alt={`Image ${index + 1}`}
-                        fill
-                        className="object-cover transition-transform hover:scale-105"
-                      />
-                    )}
-                    {/* Show +N overlay for more than 4 images */}
-                    {index === 3 && images.length > 4 && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-2xl font-bold text-white">
-                        +{images.length - 4}
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Trade Actions */}
-            {trade?.isTrade && (
-              <TradeActions
-                post={post}
-                isOwner={isOwner}
-                onUpdate={onUpdate}
-                className="mt-3"
-              />
-            )}
-
-            {/* Engagement Actions - X/Facebook Style */}
-            <div className="mt-3 flex max-w-md justify-between text-muted-foreground">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCommentModal(true)}
-                className="gap-2 rounded-full px-3 hover:bg-primary/10 hover:text-primary"
-              >
-                <MessageSquare className="h-4 w-4" />
-                <span className="text-sm">Comment</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-2 rounded-full px-3 hover:bg-green-500/10 hover:text-green-500"
-              >
-                <Repeat2 className="h-4 w-4" />
-                <span className="text-sm">0</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLike}
-                disabled={!isAuthenticated || isLiking}
-                className={`gap-2 rounded-full px-3 transition-colors ${
-                  isLiked
-                    ? "text-red-500 hover:bg-red-500/10"
-                    : "hover:bg-red-500/10 hover:text-red-500"
-                }`}
-              >
-                <Heart className={`h-4 w-4 ${isLiked ? "fill-current" : ""}`} />
-                <span className="text-sm">{likeCount}</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-2 rounded-full px-3 hover:bg-primary/10 hover:text-primary"
-              >
-                <Share className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Replies/Comments Section */}
-            {/* {replies.length > 0 && (
-              <div className="mt-3 border-t border-border pt-3 space-y-3">
-                <p className="text-xs text-muted-foreground font-medium">
-                  {replies.length}{" "}
-                  {replies.length === 1 ? "comment" : "comments"}
-                </p>
-                {replies.slice(0, 3).map((reply) => {
-                  const replyAuthor = reply.author || reply.user;
-                  const replyAuthorId = reply.authorId || reply.userId || "";
-                  return (
-                    <div
-                      key={reply.id}
-                      className="flex gap-2 pl-2 border-l-2 border-muted"
-                    >
-                      <Link
-                        href={`/user/${replyAuthorId}`}
-                        className="shrink-0"
+                      <div
+                        className="relative w-full"
+                        style={{ minHeight: "200px", maxHeight: "500px" }}
                       >
-                        <Avatar className="h-6 w-6">
-                          <AvatarImage
-                            src={replyAuthor?.avatarUrl || undefined}
-                            alt={replyAuthor?.displayName}
-                          />
-                          <AvatarFallback className="text-xs">
-                            {replyAuthor?.displayName
-                              ?.charAt(0)
-                              .toUpperCase() || "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                      </Link>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Link
-                            href={`/user/${replyAuthorId}`}
-                            className="font-semibold text-foreground hover:underline"
-                          >
-                            {replyAuthor?.displayName || "Anonymous"}
-                          </Link>
-                          <span className="text-muted-foreground">·</span>
-                          <span className="text-muted-foreground">
-                            {formatDistanceToNow(new Date(reply.createdAt), {
-                              addSuffix: true,
-                            })}
-                          </span>
-                        </div>
-                        <p className="text-sm text-foreground mt-0.5">
-                          {reply.body}
-                        </p>
+                        <Image
+                          src={images[0] || "/placeholder.svg"}
+                          alt="Image 1"
+                          fill
+                          className="object-contain"
+                          sizes="(max-width: 768px) 100vw, 600px"
+                        />
                       </div>
-                    </div>
-                  );
-                })}
-                {replies.length > 3 && (
-                  <button className="text-xs text-primary hover:underline">
-                    View all {replies.length} comments
+                    )}
                   </button>
-                )}
+
+                  {/* Additional Images - Small thumbnails grid */}
+                  {images.length > 1 && (
+                    <div className="grid grid-cols-4 gap-1">
+                      {images.slice(1, 5).map((img, index) => (
+                        <button
+                          key={index + 1}
+                          type="button"
+                          onClick={() => setLightboxImage(img)}
+                          className={cn(
+                            "relative aspect-square overflow-hidden rounded-lg border border-border bg-muted/50 transition-all duration-300 hover:brightness-90",
+                            index === 3 && images.length > 5 ? "relative" : ""
+                          )}
+                        >
+                          {img.startsWith("data:") ? (
+                            <img
+                              src={img || "/placeholder.svg"}
+                              alt={`Image ${index + 2}`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Image
+                              src={img || "/placeholder.svg"}
+                              alt={`Image ${index + 2}`}
+                              fill
+                              className="object-cover"
+                              sizes="150px"
+                            />
+                          )}
+                          {/* Overlay for remaining images count */}
+                          {index === 3 && images.length > 5 && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-lg font-bold text-white">
+                              +{images.length - 5}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Trade Actions */}
+              {trade?.isTrade && (
+                <TradeActions
+                  post={post}
+                  isOwner={isOwner}
+                  onUpdate={onUpdate}
+                  className="mt-3"
+                />
+              )}
+
+              {/* Engagement Actions */}
+              <div className="mt-4 flex max-w-md justify-between text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCommentModal(true)}
+                  className="gap-2 rounded-full px-4 hover:bg-primary/10 hover:text-primary transition-all"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  <span className="text-sm">Comment</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 rounded-full px-4 hover:bg-green-500/10 hover:text-green-500 transition-all"
+                >
+                  <Repeat2 className="h-4 w-4" />
+                  <span className="text-sm">0</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLike}
+                  disabled={!isAuthenticated || isLiking}
+                  className={cn(
+                    "gap-2 rounded-full px-4 transition-all",
+                    isLiked
+                      ? "text-red-500 hover:bg-red-500/10"
+                      : "hover:text-red-500 hover:bg-red-500/10"
+                  )}
+                >
+                  <Heart
+                    className={cn(
+                      "h-4 w-4 transition-transform duration-200",
+                      isLiked ? "fill-current scale-110" : ""
+                    )}
+                  />
+                  <span className="text-sm">{likeCount}</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 rounded-full px-4 hover:bg-primary/10 hover:text-primary transition-all"
+                >
+                  <Share className="h-4 w-4" />
+                </Button>
               </div>
-            )} */}
+            </div>
           </div>
         </div>
       </div>
@@ -405,7 +537,7 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
         <DialogContent className="max-h-[90vh] max-w-[90vw] border-0 bg-transparent p-0 shadow-none">
           <button
             onClick={() => setLightboxImage(null)}
-            className="absolute -right-2 -top-2 z-10 rounded-full bg-black/80 p-2 text-white hover:bg-black"
+            className="absolute -right-2 -top-2 z-10 rounded-full bg-black/80 p-2 text-white hover:bg-black transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -426,6 +558,130 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
         onClose={() => setShowCommentModal(false)}
         onUpdate={onUpdate}
       />
+
+      {/* Edit Post Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Post</DialogTitle>
+            <DialogDescription>
+              Make changes to your post below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <Textarea
+              value={editBody}
+              onChange={(e) => setEditBody(e.target.value)}
+              placeholder="What's on your mind?"
+              className="min-h-[120px] resize-none"
+            />
+
+            {/* Image Previews */}
+            {editImages.length > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                {editImages.map((img, index) => (
+                  <div
+                    key={index}
+                    className="relative rounded-lg overflow-hidden group"
+                  >
+                    <img
+                      src={img.url}
+                      alt={`Image ${index + 1}`}
+                      className="w-full h-32 object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeEditImage(index)}
+                      className="absolute top-2 right-2 rounded-full bg-black/70 p-1.5 text-white transition-opacity opacity-0 group-hover:opacity-100 hover:bg-black"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Image Upload */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={editFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleEditImageSelect}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => editFileInputRef.current?.click()}
+                className="gap-2"
+              >
+                <ImageIcon className="h-4 w-4" />
+                Add Images
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {editImages.length} image(s)
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditDialog(false)}
+              disabled={isEditing}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEdit}
+              disabled={
+                isEditing || (!editBody.trim() && editImages.length === 0)
+              }
+            >
+              {isEditing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Post</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this post? This action cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -165,10 +165,6 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
     .replace(/Price:\s*\S+/gi, "")
     .trim();
 
-  // Extract price if present
-  const priceMatch = post.body.match(/Price:\s*(\S+)/i);
-  const price = priceMatch ? priceMatch[1] : null;
-
   return (
     <Card className="border-border/50 hover:border-border transition-colors">
       <CardContent className="p-4">
@@ -197,11 +193,6 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
                 >
                   {intent}
                 </span>
-              )}
-              {price && (
-                <Badge variant="outline" className="text-xs">
-                  {price}
-                </Badge>
               )}
               <span className="text-muted-foreground">·</span>
               <span className="text-sm text-muted-foreground">
@@ -243,23 +234,41 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
           {displayBody}
         </div>
 
-        {/* Images */}
+        {/* Images - Facebook Style */}
         {images.length > 0 && (
-          <div
-            className={`mt-3 rounded-xl overflow-hidden border border-border ${
-              images.length === 1 ? "" : "grid grid-cols-2 gap-0.5"
-            }`}
-          >
-            {images.slice(0, 4).map((img, idx) => (
+          <div className="mt-3 space-y-1">
+            {/* Main Image - Full width, maintains aspect ratio */}
+            <div className="relative w-full overflow-hidden rounded-xl border border-border bg-muted/50">
               <img
-                key={idx}
-                src={img}
+                src={images[0]}
                 alt=""
-                className={`w-full object-cover ${
-                  images.length === 1 ? "max-h-[500px]" : "h-48"
-                }`}
+                className="w-full max-h-[500px] object-contain"
               />
-            ))}
+            </div>
+
+            {/* Additional Images - Small thumbnails grid */}
+            {images.length > 1 && (
+              <div className="grid grid-cols-4 gap-1">
+                {images.slice(1, 5).map((img, idx) => (
+                  <div
+                    key={idx + 1}
+                    className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted/50"
+                  >
+                    <img
+                      src={img}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                    {/* Overlay for remaining images count */}
+                    {idx === 3 && images.length > 5 && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-lg font-bold text-white">
+                        +{images.length - 5}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -7,6 +7,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -37,8 +38,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f0f14",
-  colorScheme: "dark",
+  themeColor: [
+    { color: "#ffffff", media: "(prefers-color-scheme: light)" },
+    { color: "#0f0f14", media: "(prefers-color-scheme: dark)" },
+  ],
 };
 
 function SidebarSkeleton() {
@@ -62,19 +65,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <AuthProvider>
-          <div className="flex min-h-screen flex-col">
-            <Header />
-            <div className="flex flex-1">
-              <Suspense fallback={<SidebarSkeleton />}>
-                <Sidebar />
-              </Suspense>
-              <main className="flex-1">{children}</main>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <div className="flex min-h-screen flex-col">
+              <Header />
+              <div className="flex flex-1">
+                <Suspense fallback={<SidebarSkeleton />}>
+                  <Sidebar />
+                </Suspense>
+                <main className="flex-1">{children}</main>
+              </div>
             </div>
-          </div>
-        </AuthProvider>
+          </AuthProvider>
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>
