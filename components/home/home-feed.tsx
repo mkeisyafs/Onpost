@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import useSWR from "swr";
 import forumsApi from "@/lib/forums-api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +10,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Heart, MessageSquare, Share, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
+import { CommentModal } from "@/components/post/comment-modal";
+import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 import type { ForumsPost, ForumsThread } from "@/lib/types";
 
 const intentStyles: Record<string, string> = {
@@ -139,7 +141,14 @@ interface ExtendedPost extends ForumsPost {
   _threadPostCount?: number;
 }
 
-function FeedPostCard({ post }: { post: ExtendedPost }) {
+function FeedPostCard({
+  post,
+  onUpdate,
+}: {
+  post: ExtendedPost;
+  onUpdate?: () => void;
+}) {
+  const { user: currentUser, isAuthenticated } = useAuth();
   const author = post.author || post.user;
   const authorId = post.authorId || post.userId || "";
   const tags = post.extendedData?.tags || [];
@@ -147,6 +156,43 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
   const threadTitle = post._threadTitle;
   const threadId = post._threadId;
   const viewCount = post._threadViewCount || 0;
+
+  // Like state
+  const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
+  const [isLiked, setIsLiked] = useState(
+    post.likes?.some((like) => like.userId === currentUser?.id) || false
+  );
+  const [isLiking, setIsLiking] = useState(false);
+
+  // Comment modal state
+  const [showCommentModal, setShowCommentModal] = useState(false);
+
+  // Handle Like
+  const handleLike = async () => {
+    if (!isAuthenticated || isLiking) return;
+
+    setIsLiking(true);
+    const wasLiked = isLiked;
+
+    // Optimistic update
+    setIsLiked(!wasLiked);
+    setLikeCount((prev) => (wasLiked ? prev - 1 : prev + 1));
+
+    try {
+      if (wasLiked) {
+        await forumsApi.posts.unlike(post.id);
+      } else {
+        await forumsApi.posts.like(post.id);
+      }
+    } catch (error) {
+      // Revert on error
+      setIsLiked(wasLiked);
+      setLikeCount((prev) => (wasLiked ? prev + 1 : prev - 1));
+      console.error("Failed to update like:", error);
+    } finally {
+      setIsLiking(false);
+    }
+  };
 
   // Detect intent from body
   const detectIntent = (text: string): "WTS" | "WTB" | "WTT" | null => {
@@ -268,40 +314,72 @@ function FeedPostCard({ post }: { post: ExtendedPost }) {
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border/50">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground hover:text-red-500"
-            >
-              <Heart className="h-4 w-4" />
-              <span className="text-sm">{post.likes?.length || 0}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground hover:text-primary"
-            >
-              <MessageSquare className="h-4 w-4" />
-              <span className="text-sm">Reply</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground"
-            >
-              <Share className="h-4 w-4" />
-            </Button>
+        {/* Actions - Facebook Style */}
+        <div className="mt-4 border-t border-border/50 pt-1">
+          {/* Stats row */}
+          <div className="flex items-center justify-between px-2 py-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              {likeCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500">
+                    <Heart className="h-3 w-3 fill-white text-white" />
+                  </span>
+                  {likeCount}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <Eye className="h-3.5 w-3.5" />
+                {viewCount}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Eye className="h-3.5 w-3.5" />
-              {viewCount}
-            </span>
+
+          {/* Action buttons row */}
+          <div className="flex border-t border-border/50">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLike}
+              disabled={!isAuthenticated || isLiking}
+              className={cn(
+                "flex-1 gap-2 rounded-none py-3 h-auto font-normal",
+                isLiked
+                  ? "text-primary hover:bg-primary/10"
+                  : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <Heart className={cn("h-5 w-5", isLiked ? "fill-current" : "")} />
+              <span>Like</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowCommentModal(true)}
+              className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
+            >
+              <MessageSquare className="h-5 w-5" />
+              <span>Comment</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
+            >
+              <Share className="h-5 w-5" />
+              <span>Share</span>
+            </Button>
           </div>
         </div>
+
+        {/* Comment Modal */}
+        <CommentModal
+          post={post}
+          isOpen={showCommentModal}
+          onClose={() => setShowCommentModal(false)}
+          onUpdate={onUpdate}
+        />
       </CardContent>
     </Card>
   );

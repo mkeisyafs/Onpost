@@ -474,44 +474,67 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
                 />
               )}
 
-              {/* Engagement Actions */}
-              <div className="mt-4 flex max-w-md justify-between text-muted-foreground">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowCommentModal(true)}
-                  className="gap-2 rounded-full px-4 hover:bg-primary/10 hover:text-primary transition-all"
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  <span className="text-sm">Comment</span>
-                </Button> 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLike}
-                  disabled={!isAuthenticated || isLiking}
-                  className={cn(
-                    "gap-2 rounded-full px-4 transition-all",
-                    isLiked
-                      ? "text-red-500 hover:bg-red-500/10"
-                      : "hover:text-red-500 hover:bg-red-500/10"
-                  )}
-                >
-                  <Heart
-                    className={cn(
-                      "h-4 w-4 transition-transform duration-200",
-                      isLiked ? "fill-current scale-110" : ""
+              {/* Engagement Actions - Facebook Style */}
+              <div className="mt-4 border-t border-border/50 pt-1">
+                {/* Stats row */}
+                <div className="flex items-center justify-between px-2 py-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    {likeCount > 0 && (
+                      <span className="flex items-center gap-1">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500">
+                          <Heart className="h-3 w-3 fill-white text-white" />
+                        </span>
+                        {likeCount}
+                      </span>
                     )}
-                  />
-                  <span className="text-sm">{likeCount}</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-2 rounded-full px-4 hover:bg-primary/10 hover:text-primary transition-all"
-                >
-                  <Share className="h-4 w-4" />
-                </Button>
+                  </div>
+                  {(post.commentCount ?? 0) > 0 && (
+                    <button
+                      onClick={() => setShowCommentModal(true)}
+                      className="hover:underline"
+                    >
+                      {post.commentCount} komentar
+                    </button>
+                  )}
+                </div>
+
+                {/* Action buttons row */}
+                <div className="flex border-t border-border/50">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLike}
+                    disabled={!isAuthenticated || isLiking}
+                    className={cn(
+                      "flex-1 gap-2 rounded-none py-3 h-auto font-normal",
+                      isLiked
+                        ? "text-primary hover:bg-primary/10"
+                        : "text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    <Heart
+                      className={cn("h-5 w-5", isLiked ? "fill-current" : "")}
+                    />
+                    <span>Like</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowCommentModal(true)}
+                    className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
+                  >
+                    <MessageSquare className="h-5 w-5" />
+                    <span>Comment</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
+                  >
+                    <Share className="h-5 w-5" />
+                    <span>Share</span>
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
