@@ -33,8 +33,8 @@ import type {
 import { CommentModal } from "@/components/post/comment-modal";
 import forumsApi from "@/lib/forums-api";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import type { ForumsPost } from "@/lib/types";
-import Link from "next/link";
 
 // ============================================
 // Types
@@ -59,12 +59,22 @@ export function AIMarketAssistant() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [selectedListing, setSelectedListing] =
     useState<AssistantListing | null>(null);
   const [selectedPost, setSelectedPost] = useState<ForumsPost | null>(null);
   const [isLoadingPost, setIsLoadingPost] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
+
+  // Detect mobile on mount and handle resize
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Load messages from localStorage on mount
   useEffect(() => {
@@ -197,9 +207,6 @@ export function AIMarketAssistant() {
     setSelectedListing(null);
     setSelectedPost(null);
   };
-
-  // Mobile: collapsible
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
 
   return (
     <>
@@ -340,12 +347,12 @@ export function AIMarketAssistant() {
               <p className="text-sm text-muted-foreground mb-2">
                 Sign in to use AI Assistant
               </p>
-              <Link
-                href="/login"
+              <button
+                onClick={() => openAuthModal("signin")}
                 className="text-sm text-primary hover:underline font-medium"
               >
                 Sign In →
-              </Link>
+              </button>
             </div>
           )}
         </CardContent>

@@ -20,6 +20,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageCropper } from "@/components/ui/image-cropper";
 import { X, ImageIcon, Loader2, Save, Edit, User } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
+import { uploadImage, compressImage } from "@/lib/file-api";
 import Link from "next/link";
 import type { ForumsThread, ThreadExtendedData } from "@/lib/types";
 
@@ -34,6 +35,7 @@ export default function EditThreadPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverImage, setCoverImage] = useState<{
     url: string;
@@ -108,11 +110,28 @@ export default function EditThreadPage() {
     if (iconInputRef.current) iconInputRef.current.value = "";
   };
 
-  const handleCropComplete = (croppedImageUrl: string) => {
-    if (cropType === "cover") {
-      setCoverImage({ url: croppedImageUrl });
-    } else {
-      setIcon({ url: croppedImageUrl });
+  const handleCropComplete = async (croppedImageUrl: string) => {
+    try {
+      // Convert data URL to File object for uploading
+      const response = await fetch(croppedImageUrl);
+      const blob = await response.blob();
+      const file = new File([blob], cropType === "cover" ? "cover.jpg" : "icon.jpg", {
+        type: "image/jpeg",
+      });
+
+      if (cropType === "cover") {
+        setCoverImage({ url: croppedImageUrl, file });
+      } else {
+        setIcon({ url: croppedImageUrl, file });
+      }
+    } catch (err) {
+      console.error("Failed to process cropped image:", err);
+      // Fallback: use the URL but file will be missing
+      if (cropType === "cover") {
+        setCoverImage({ url: croppedImageUrl });
+      } else {
+        setIcon({ url: croppedImageUrl });
+      }
     }
     setShowCropper(false);
     setCropImageSrc(null);
@@ -123,31 +142,7 @@ export default function EditThreadPage() {
     setCropImageSrc(null);
   };
 
-  const compressImage = async (
-    file: File,
-    maxSize: number
-  ): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const img = document.createElement("img");
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
 
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width = width;
-        canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.8));
-      };
-      img.onerror = () => reject(new Error("Failed to load image"));
-      img.src = URL.createObjectURL(file);
-    });
-  };
 
   const threadAuthorId = thread?.authorId || thread?.userId;
   const isOwner = user?.id === threadAuthorId;
@@ -196,43 +191,43 @@ export default function EditThreadPage() {
     setError(null);
 
     try {
-      let coverImageBase64: string | undefined;
-      let iconBase64: string | undefined;
+      let coverImageUrl: string | undefined;
+      let iconUrl: string | undefined;
 
-      // Handle cover image - could be cropped (base64), new file, or existing
-      if (coverImage?.url) {
-        if (coverImage.url.startsWith("data:")) {
-          // Already cropped as base64
-          coverImageBase64 = coverImage.url;
-        } else if (coverImage.file) {
-          // New uncropped file, compress it
-          coverImageBase64 = await compressImage(coverImage.file, 800);
-        } else if (coverImage.isExisting) {
-          // Existing image from server
-          coverImageBase64 = coverImage.url;
+      // Upload new images to file server
+      if (coverImage?.file || icon?.file) {
+        setIsUploadingImages(true);
+        try {
+          if (coverImage?.file) {
+            const compressed = await compressImage(coverImage.file, 800, 0.8);
+            const result = await uploadImage(compressed);
+            coverImageUrl = result.url;
+          }
+          if (icon?.file) {
+            const compressed = await compressImage(icon.file, 256, 0.8);
+            const result = await uploadImage(compressed);
+            iconUrl = result.url;
+          }
+        } catch (uploadErr) {
+          console.error("Failed to upload images:", uploadErr);
         }
+        setIsUploadingImages(false);
       }
 
-      // Handle icon - could be cropped (base64), new file, or existing
-      if (icon?.url) {
-        if (icon.url.startsWith("data:")) {
-          // Already cropped as base64
-          iconBase64 = icon.url;
-        } else if (icon.file) {
-          // New uncropped file, compress it
-          iconBase64 = await compressImage(icon.file, 256);
-        } else if (icon.isExisting) {
-          // Existing image from server
-          iconBase64 = icon.url;
-        }
+      // Use existing URLs if not uploading new ones
+      if (!coverImageUrl && coverImage?.isExisting) {
+        coverImageUrl = coverImage.url;
+      }
+      if (!iconUrl && icon?.isExisting) {
+        iconUrl = icon.url;
       }
 
       const extendedData: ThreadExtendedData = {
         ...(thread.extendedData || {}),
       };
-      if (coverImageBase64) extendedData.coverImage = coverImageBase64;
+      if (coverImageUrl) extendedData.coverImage = coverImageUrl;
       else delete extendedData.coverImage;
-      if (iconBase64) extendedData.icon = iconBase64;
+      if (iconUrl) extendedData.icon = iconUrl;
       else delete extendedData.icon;
 
       await forumsApi.threads.update(threadId, {

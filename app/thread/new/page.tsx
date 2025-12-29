@@ -37,6 +37,7 @@ import {
   Loader2,
 } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
+import { uploadImage, compressImage } from "@/lib/file-api";
 import Link from "next/link";
 import type { Tag, ThreadExtendedData } from "@/lib/types";
 
@@ -140,17 +141,34 @@ export default function NewThreadPage() {
     if (iconInputRef.current) iconInputRef.current.value = "";
   };
 
-  const handleCropComplete = (croppedImageUrl: string) => {
-    if (cropType === "cover") {
-      if (coverImage?.url && !coverImage.url.startsWith("data:")) {
-        URL.revokeObjectURL(coverImage.url);
+  const handleCropComplete = async (croppedImageUrl: string) => {
+    try {
+      // Convert data URL to File object for uploading
+      const response = await fetch(croppedImageUrl);
+      const blob = await response.blob();
+      const file = new File([blob], cropType === "cover" ? "cover.jpg" : "icon.jpg", {
+        type: "image/jpeg",
+      });
+
+      if (cropType === "cover") {
+        if (coverImage?.url && !coverImage.url.startsWith("data:")) {
+          URL.revokeObjectURL(coverImage.url);
+        }
+        setCoverImage({ url: croppedImageUrl, file });
+      } else {
+        if (icon?.url && !icon.url.startsWith("data:")) {
+          URL.revokeObjectURL(icon.url);
+        }
+        setIcon({ url: croppedImageUrl, file });
       }
-      setCoverImage({ url: croppedImageUrl });
-    } else {
-      if (icon?.url && !icon.url.startsWith("data:")) {
-        URL.revokeObjectURL(icon.url);
+    } catch (err) {
+      console.error("Failed to process cropped image:", err);
+      // Fallback: use the URL but file will be missing
+      if (cropType === "cover") {
+        setCoverImage({ url: croppedImageUrl });
+      } else {
+        setIcon({ url: croppedImageUrl });
       }
-      setIcon({ url: croppedImageUrl });
     }
     setShowCropper(false);
     setCropImageSrc(null);
@@ -161,31 +179,7 @@ export default function NewThreadPage() {
     setCropImageSrc(null);
   };
 
-  const compressImage = async (
-    file: File,
-    maxSize: number
-  ): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const img = document.createElement("img");
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
 
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width = width;
-        canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.8));
-      };
-      img.onerror = () => reject(new Error("Failed to load image"));
-      img.src = URL.createObjectURL(file);
-    });
-  };
 
   if (isLoading || loadingMeta) {
     return (
@@ -258,28 +252,24 @@ export default function NewThreadPage() {
     setError(null);
 
     try {
-      let coverImageBase64: string | undefined;
-      let iconBase64: string | undefined;
+      let coverImageUrl: string | undefined;
+      let iconUrl: string | undefined;
 
-      // Handle cover image - could be cropped (base64) or uncropped (file)
-      if (coverImage?.url) {
-        if (coverImage.url.startsWith("data:")) {
-          // Already cropped as base64
-          coverImageBase64 = coverImage.url;
-        } else if (coverImage.file) {
-          // Uncropped file, compress it
-          coverImageBase64 = await compressImage(coverImage.file, 800);
-        }
-      }
-
-      // Handle icon - could be cropped (base64) or uncropped (file)
-      if (icon?.url) {
-        if (icon.url.startsWith("data:")) {
-          // Already cropped as base64
-          iconBase64 = icon.url;
-        } else if (icon.file) {
-          // Uncropped file, compress it
-          iconBase64 = await compressImage(icon.file, 256);
+      // Upload new images to file server
+      if (coverImage?.file || icon?.file) {
+        try {
+          if (coverImage?.file) {
+            const compressed = await compressImage(coverImage.file, 800, 0.8);
+            const result = await uploadImage(compressed);
+            coverImageUrl = result.url;
+          }
+          if (icon?.file) {
+            const compressed = await compressImage(icon.file, 256, 0.8);
+            const result = await uploadImage(compressed);
+            iconUrl = result.url;
+          }
+        } catch (uploadErr) {
+          console.error("Failed to upload images:", uploadErr);
         }
       }
 
@@ -296,8 +286,8 @@ export default function NewThreadPage() {
         category: threadCategory,
       };
       if (marketData) extendedData.market = marketData;
-      if (coverImageBase64) extendedData.coverImage = coverImageBase64;
-      if (iconBase64) extendedData.icon = iconBase64;
+      if (coverImageUrl) extendedData.coverImage = coverImageUrl;
+      if (iconUrl) extendedData.icon = iconUrl;
 
       const thread = await forumsApi.threads.create({
         title: titleTrimmed,

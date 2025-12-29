@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { AuthProvider } from "@/lib/auth-context";
+import { AuthModalProvider } from "@/lib/auth-modal-context";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNavWrapper } from "@/components/layout/mobile-nav";
@@ -75,16 +76,18 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <div className="flex min-h-screen flex-col">
-              <Header />
-              <div className="flex flex-1">
-                <Suspense fallback={<SidebarSkeleton />}>
-                  <Sidebar />
-                </Suspense>
-                <main className="flex-1 pb-16 lg:pb-0">{children}</main>
+            <AuthModalProvider>
+              <div className="flex min-h-screen flex-col">
+                <Header />
+                <div className="flex flex-1">
+                  <Suspense fallback={<SidebarSkeleton />}>
+                    <Sidebar />
+                  </Suspense>
+                  <main className="flex-1 pb-16 lg:pb-0">{children}</main>
+                </div>
               </div>
-            </div>
-            <MobileNavWrapper />
+              <MobileNavWrapper />
+            </AuthModalProvider>
           </AuthProvider>
         </ThemeProvider>
         <Analytics />

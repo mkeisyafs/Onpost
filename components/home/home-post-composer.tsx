@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ImageIcon, X, Send, DollarSign } from "lucide-react";
+import { ImageIcon, X, Send, DollarSign, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import forumsApi from "@/lib/forums-api";
-import Link from "next/link";
+import { uploadImage, compressImage } from "@/lib/file-api";
 
 // Available tags for selection
 const GAME_TAGS = [
@@ -40,8 +41,10 @@ interface HomePostComposerProps {
 
 export function HomePostComposer({ onPostCreated }: HomePostComposerProps) {
   const { user, isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
   const [body, setBody] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedIntent, setSelectedIntent] = useState<
     "WTS" | "WTB" | "WTT" | null
@@ -97,28 +100,7 @@ export function HomePostComposer({ onPostCreated }: HomePostComposerProps) {
     });
   };
 
-  const compressImage = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const img = document.createElement("img");
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      img.onload = () => {
-        const MAX_SIZE = 1024;
-        let { width, height } = img;
-        if (width > MAX_SIZE || height > MAX_SIZE) {
-          const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width = width;
-        canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.8));
-      };
-      img.onerror = () => reject(new Error("Failed to load image"));
-      img.src = URL.createObjectURL(file);
-    });
-  };
+  // Note: compressImage is imported from @/lib/file-api
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,29 +110,47 @@ export function HomePostComposer({ onPostCreated }: HomePostComposerProps) {
     setError(null);
 
     try {
-      // Compress images
-      const imageUrls = await Promise.all(
-        images.filter((img) => img.file).map((img) => compressImage(img.file!))
-      );
+      // Upload images to file server first
+      const uploadedImageUrls: string[] = [];
+      if (images.length > 0) {
+        setIsUploading(true);
+        for (const img of images) {
+          if (img.file) {
+            try {
+              // Compress image before upload
+              const compressed = await compressImage(img.file, 1024, 0.8);
+              const result = await uploadImage(compressed);
+              uploadedImageUrls.push(result.url);
+            } catch (uploadErr) {
+              console.error("Failed to upload image:", uploadErr);
+              // Continue with other images
+            }
+          }
+        }
+        setIsUploading(false);
+      }
 
       // Build post body with intent tag
       const intentPrefix = selectedIntent ? `#${selectedIntent} ` : "";
       const priceText = price && selectedIntent ? `\n\nPrice: ${price}` : "";
       let postBody = intentPrefix + body.trim() + priceText;
 
-      if (imageUrls.length > 0) {
+      // Add image references to body
+      if (uploadedImageUrls.length > 0) {
         postBody +=
-          "\n\n" + imageUrls.map((_, i) => `[Image ${i + 1}]`).join(" ");
+          "\n\n" +
+          uploadedImageUrls.map((_, i) => `[Image ${i + 1}]`).join(" ");
       }
 
-      // Build extendedData
+      // Build extendedData with image URLs (not base64!)
       const extendedData: Record<string, unknown> = {
         homeFeed: true,
         tags: selectedTags,
       };
 
-      if (imageUrls.length > 0) {
-        extendedData.images = imageUrls;
+      // Store image URLs (small strings, not huge base64)
+      if (uploadedImageUrls.length > 0) {
+        extendedData.images = uploadedImageUrls;
       }
 
       // Get thread ID - try env var first, then fetch first available thread
@@ -204,12 +204,10 @@ export function HomePostComposer({ onPostCreated }: HomePostComposerProps) {
         <CardContent className="py-6 text-center">
           <p className="text-muted-foreground mb-3">Join the conversation!</p>
           <div className="flex gap-2 justify-center">
-            <Button variant="outline" asChild>
-              <Link href="/login">Sign In</Link>
+            <Button variant="outline" onClick={() => openAuthModal("signin")}>
+              Sign In
             </Button>
-            <Button asChild>
-              <Link href="/register">Sign Up</Link>
-            </Button>
+            <Button onClick={() => openAuthModal("signup")}>Sign Up</Button>
           </div>
         </CardContent>
       </Card>
@@ -420,12 +418,22 @@ export function HomePostComposer({ onPostCreated }: HomePostComposerProps) {
                 <Button
                   type="submit"
                   disabled={
-                    isSubmitting || (!body.trim() && images.length === 0)
+                    isSubmitting ||
+                    isUploading ||
+                    (!body.trim() && images.length === 0)
                   }
                   className="rounded-full px-5 font-semibold"
                 >
-                  {isSubmitting ? (
-                    "Posting..."
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      Posting...
+                    </>
                   ) : (
                     <>
                       <Send className="mr-1.5 h-4 w-4" />

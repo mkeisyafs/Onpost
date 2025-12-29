@@ -30,13 +30,14 @@ export interface ForumsThread {
   user?: ForumsUser;
   author?: ForumsUser;
   categoryId?: string;
-  tags: string[];
+  tags: (string | Tag)[];
   isPinned?: boolean;
   isLocked?: boolean;
   pinned?: boolean;
   locked?: boolean;
   postCount?: number;
   viewCount?: number;
+  likeCount?: number;
   createdAt: string;
   updatedAt: string;
   extendedData?: ThreadExtendedData;
@@ -67,9 +68,12 @@ export interface ForumsPrivateMessage {
   sender?: ForumsUser;
   recipientId: string;
   recipient?: ForumsUser;
-  parentMessageId: string | null;
-  isRead: boolean;
+  parentMessageId?: string | null;
+  // API may return either 'read' or 'isRead'
+  read?: boolean;
+  isRead?: boolean;
   createdAt: string;
+  updatedAt?: string;
   extendedData?: PMExtendedData;
 }
 
@@ -200,6 +204,7 @@ export interface ThreadExtendedData {
   coverImage?: string;
   icon?: string;
   category?: "game-items" | "accounts" | "physical" | "services";
+  images?: string[];
 }
 
 // User Trust Data
@@ -218,6 +223,7 @@ export interface UserExtendedData {
 export interface PMExtendedData {
   linkedPostId?: string;
   linkedThreadId?: string;
+  imageUrl?: string; // Support for image attachments
 }
 
 // ============================================
@@ -243,7 +249,7 @@ export interface PostsResponse {
 }
 
 export interface MessagesResponse {
-  messages: ForumsPrivateMessage[];
+  privateMessages: ForumsPrivateMessage[];
   nextMessageCursor: string | null;
 }
 

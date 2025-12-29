@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Home, TrendingUp, Bot, MessageSquare, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ const navItems = [
 export function MobileNavWrapper() {
   const pathname = usePathname();
   const { isAuthenticated, user } = useAuth();
+  const { openAuthModal } = useAuthModal();
   const [showMobileAI, setShowMobileAI] = useState(false);
 
   return (
@@ -55,24 +57,37 @@ export function MobileNavWrapper() {
               );
             }
 
-            // Profile - check auth
+            // Profile - check auth, open modal if not authenticated
             if (item.name === "Profile") {
+              if (isAuthenticated && user?.id) {
+                return (
+                  <Link
+                    key={item.name}
+                    href={`/user/${user.id}`}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors",
+                      isActive
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-primary"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    <span className="text-xs font-medium">{item.name}</span>
+                  </Link>
+                );
+              }
               return (
-                <Link
+                <button
                   key={item.name}
-                  href={
-                    isAuthenticated && user?.id ? `/user/${user.id}` : "/login"
-                  }
+                  onClick={() => openAuthModal("signin")}
                   className={cn(
                     "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors",
-                    isActive
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-primary"
+                    "text-muted-foreground hover:text-primary"
                   )}
                 >
                   <item.icon className="h-5 w-5" />
                   <span className="text-xs font-medium">{item.name}</span>
-                </Link>
+                </button>
               );
             }
 

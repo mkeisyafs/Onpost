@@ -20,9 +20,12 @@ import {
   ImageIcon,
   Smile,
   X,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import forumsApi from "@/lib/forums-api";
+import { uploadImage, compressImage } from "@/lib/file-api";
 import type { ForumsPost, ForumsUser } from "@/lib/types";
 import Link from "next/link";
 
@@ -56,16 +59,21 @@ export function CommentModal({
   onUpdate,
 }: CommentModalProps) {
   const { user, isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
   const [comments, setComments] = useState<Comment[]>([]);
   const [replies, setReplies] = useState<Record<string, Comment[]>>({});
   const [loading, setLoading] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [commentImage, setCommentImage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingComment, setUploadingComment] = useState(false);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyImage, setReplyImage] = useState<string | null>(null);
+  const [replyImageFile, setReplyImageFile] = useState<File | null>(null);
   const [submittingReply, setSubmittingReply] = useState(false);
+  const [uploadingReply, setUploadingReply] = useState(false);
+  const [commentImageFile, setCommentImageFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const replyImageInputRef = useRef<HTMLInputElement>(null);
@@ -113,39 +121,7 @@ export function CommentModal({
     }
   };
 
-  // Image compression
-  const compressImage = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const maxSize = 800;
-          let { width, height } = img;
-
-          if (width > height && width > maxSize) {
-            height = (height * maxSize) / width;
-            width = maxSize;
-          } else if (height > maxSize) {
-            width = (width * maxSize) / height;
-            height = maxSize;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", 0.8));
-        };
-        img.onerror = reject;
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
+  // Image selection - now stores file for upload
   const handleImageSelect = async (
     e: React.ChangeEvent<HTMLInputElement>,
     isReply = false
@@ -153,33 +129,53 @@ export function CommentModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      const compressed = await compressImage(file);
-      if (isReply) {
-        setReplyImage(compressed);
-      } else {
-        setCommentImage(compressed);
-      }
-    } catch (err) {
-      console.error("Failed to process image:", err);
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(file);
+    if (isReply) {
+      setReplyImage(previewUrl);
+      setReplyImageFile(file);
+    } else {
+      setCommentImage(previewUrl);
+      setCommentImageFile(file);
     }
   };
 
   const handleSubmitComment = async () => {
-    if ((!newComment.trim() && !commentImage) || !isAuthenticated || submitting)
+    if (
+      (!newComment.trim() && !commentImageFile) ||
+      !isAuthenticated ||
+      submitting
+    )
       return;
 
     setSubmitting(true);
     try {
+      // Upload image to file server if present
+      let uploadedImageUrl: string | undefined;
+      if (commentImageFile) {
+        setUploadingComment(true);
+        try {
+          const compressed = await compressImage(commentImageFile, 800, 0.8);
+          const result = await uploadImage(compressed);
+          uploadedImageUrl = result.url;
+        } catch (uploadErr) {
+          console.error("Failed to upload image:", uploadErr);
+        }
+        setUploadingComment(false);
+      }
+
       await forumsApi.posts.create({
         threadId: post.threadId,
         body: newComment.trim(),
         userId: user?.id,
         parentId: post.id,
-        extendedData: commentImage ? { images: [commentImage] } : undefined,
+        extendedData: uploadedImageUrl
+          ? { images: [uploadedImageUrl] }
+          : undefined,
       });
       setNewComment("");
       setCommentImage(null);
+      setCommentImageFile(null);
       await fetchComments();
       onUpdate?.();
     } catch (err) {
@@ -191,7 +187,7 @@ export function CommentModal({
 
   const handleSubmitReply = async (parentCommentId: string) => {
     if (
-      (!replyText.trim() && !replyImage) ||
+      (!replyText.trim() && !replyImageFile) ||
       !isAuthenticated ||
       submittingReply
     )
@@ -199,15 +195,32 @@ export function CommentModal({
 
     setSubmittingReply(true);
     try {
+      // Upload image to file server if present
+      let uploadedImageUrl: string | undefined;
+      if (replyImageFile) {
+        setUploadingReply(true);
+        try {
+          const compressed = await compressImage(replyImageFile, 800, 0.8);
+          const result = await uploadImage(compressed);
+          uploadedImageUrl = result.url;
+        } catch (uploadErr) {
+          console.error("Failed to upload image:", uploadErr);
+        }
+        setUploadingReply(false);
+      }
+
       await forumsApi.posts.create({
         threadId: post.threadId,
         body: replyText.trim(),
         userId: user?.id,
         parentId: parentCommentId,
-        extendedData: replyImage ? { images: [replyImage] } : undefined,
+        extendedData: uploadedImageUrl
+          ? { images: [uploadedImageUrl] }
+          : undefined,
       });
       setReplyText("");
       setReplyImage(null);
+      setReplyImageFile(null);
       setReplyingTo(null);
       await fetchComments();
       onUpdate?.();
@@ -567,9 +580,12 @@ export function CommentModal({
             </div>
           ) : (
             <div className="text-center py-2">
-              <Link href="/login" className="text-primary hover:underline">
+              <button
+                onClick={() => openAuthModal("signin")}
+                className="text-primary hover:underline"
+              >
                 Sign in to comment
-              </Link>
+              </button>
             </div>
           )}
         </div>

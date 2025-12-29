@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, X, ChevronUp, Image, Smile } from "lucide-react";
 import Link from "next/link";
+import { useAuthModal } from "@/lib/auth-modal-context";
 
 interface ThreadViewProps {
   threadId: string;
@@ -33,6 +34,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
   const [showPostForm, setShowPostForm] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const { isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
 
   const {
     data: thread,
@@ -41,6 +43,9 @@ export function ThreadView({ threadId }: ThreadViewProps) {
     mutate,
   } = useSWR(["thread", threadId], () => forumsApi.threads.get(threadId), {
     revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    dedupingInterval: 60000, // Don't refetch for 60 seconds
+    shouldRetryOnError: false, // Don't auto-retry on error
   });
 
   // Fetch posts to get actual count (with error resilience)
@@ -66,8 +71,8 @@ export function ThreadView({ threadId }: ThreadViewProps) {
 
   // Scroll to hash anchor when page loads (for #post-xxx links)
   useEffect(() => {
-    // Wait for posts to load, then scroll to anchor
-    if (!isLoading && postsData) {
+    // Wait for thread to load, then scroll to anchor
+    if (!isLoading && thread) {
       const hash = window.location.hash;
       if (hash && hash.startsWith("#post-")) {
         // Small delay to ensure DOM is rendered
@@ -88,7 +93,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
         }, 500);
       }
     }
-  }, [isLoading, postsData]);
+  }, [isLoading, thread]);
 
   const handlePostCreated = () => {
     setRefreshKey((prev) => prev + 1);
@@ -140,10 +145,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
     <>
       <div className="mx-auto max-w-4xl px-4 py-6">
         {/* Thread Header */}
-        <ThreadHeader
-          thread={thread}
-          postCount={postsData?.count ?? thread.postCount ?? 0}
-        />
+        <ThreadHeader thread={thread} postCount={thread.postCount ?? 0} />
 
         {/* Market Tabs */}
         {hasMarket && (
@@ -163,13 +165,13 @@ export function ThreadView({ threadId }: ThreadViewProps) {
                 <h2 className="text-lg font-semibold text-foreground">
                   Post
                   <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({postsData?.count ?? thread.postCount ?? 0})
+                    ({thread.postCount ?? 0})
                   </span>
                 </h2>
               </div>
 
               {/* System Welcome Message - shown for new threads */}
-              {(postsData?.count ?? thread.postCount ?? 0) < 3 && (
+              {(thread.postCount ?? 0) < 3 && (
                 <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 flex items-start gap-3">
                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <span className="text-lg">🏪</span>
@@ -230,13 +232,11 @@ export function ThreadView({ threadId }: ThreadViewProps) {
         {/* Login Prompt FAB */}
         {!isAuthenticated && (
           <Button
-            asChild
+            onClick={() => openAuthModal("signin")}
             size="icon"
             className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90"
           >
-            <Link href="/login">
-              <Plus className="h-6 w-6" />
-            </Link>
+            <Plus className="h-6 w-6" />
           </Button>
         )}
       </div>
