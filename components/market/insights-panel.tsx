@@ -1,20 +1,36 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Lock, Sparkles, RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import type { ThreadMarketData } from "@/lib/types"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Lock, Sparkles, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { ThreadMarketData } from "@/lib/types";
 
 interface InsightsPanelProps {
-  market: ThreadMarketData
+  market: ThreadMarketData;
+  // Admin override - if true, insights is unlocked (like 10 posts fulfilled)
+  adminEnabled?: boolean;
 }
 
-export function InsightsPanel({ market }: InsightsPanelProps) {
-  const { analytics, validCount, thresholdValid } = market
-  const { locked, narrative, narrativeUpdatedAt } = analytics
+export function InsightsPanel({ market, adminEnabled }: InsightsPanelProps) {
+  const { analytics, validCount = 0, windowDays = 14 } = market;
 
-  // Locked state
-  if (locked) {
+  // Safe access to analytics properties
+  const locked = analytics?.locked ?? true;
+  const narrative = analytics?.narrative ?? null;
+  const narrativeUpdatedAt = analytics?.narrativeUpdatedAt ?? null;
+
+  // If admin enabled insights, it's like threshold is already met (unlocked)
+  // If admin disabled (false/undefined), follow normal threshold logic
+  const isLocked = adminEnabled ? false : locked;
+
+  // Locked state (only if admin hasn't enabled it)
+  if (isLocked) {
     return (
       <Card>
         <CardHeader>
@@ -23,15 +39,15 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
             <CardTitle>AI Insights Locked</CardTitle>
           </div>
           <CardDescription>
-            Insights will be generated once the market has at least {thresholdValid} valid trade posts. Currently at{" "}
-            {validCount}.
+            Insights will be generated once the market has at least 10 valid
+            trade posts. Currently at {validCount}.
           </CardDescription>
         </CardHeader>
       </Card>
-    )
+    );
   }
 
-  // No narrative yet
+  // No narrative yet - show no data state
   if (!narrative) {
     return (
       <Card>
@@ -40,15 +56,26 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
             <Sparkles className="h-5 w-5 text-primary" />
             <CardTitle>AI Insights</CardTitle>
           </div>
-          <CardDescription>Generating market insights...</CardDescription>
+          <CardDescription>
+            {adminEnabled
+              ? "Insights enabled by admin"
+              : "AI insights available"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="rounded-lg bg-muted/50 p-6 text-center">
+            <div className="mb-3 text-3xl">💡</div>
+            <p className="font-medium text-foreground">
+              No Insights Generated Yet
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              AI insights will be generated automatically when enough market
+              data is available.
+            </p>
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -65,7 +92,9 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
           </Button>
         </div>
         {narrativeUpdatedAt && (
-          <CardDescription>Last updated: {new Date(narrativeUpdatedAt).toLocaleString()}</CardDescription>
+          <CardDescription>
+            Last updated: {new Date(narrativeUpdatedAt).toLocaleString()}
+          </CardDescription>
         )}
       </CardHeader>
       <CardContent>
@@ -75,15 +104,18 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
 
         {/* Key Takeaways */}
         <div className="mt-6 space-y-3">
-          <h4 className="text-sm font-semibold text-foreground">Key Takeaways</h4>
+          <h4 className="text-sm font-semibold text-foreground">
+            Key Takeaways
+          </h4>
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              Market data is based on {validCount} validated trade posts from the last {market.windowDays} days
+              Market data is based on {validCount} validated trade posts from
+              the last {windowDays} days
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              Prices are normalized to IDR for comparison purposes
+              Prices are in USD for comparison purposes
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
@@ -93,5 +125,5 @@ export function InsightsPanel({ market }: InsightsPanelProps) {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
