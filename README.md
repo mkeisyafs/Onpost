@@ -119,7 +119,7 @@ FORUMS_API_KEY=your_forums_api_key_here
 KOLOSAL_API_KEY=your_kolosal_api_key_here
 
 # File Server (optional)
-NEXT_PUBLIC_FILE_SERVER_URL=http://43.228.213.41:3001
+NEXT_PUBLIC_FILE_SERVER_URL=api.haluai.my.id
 FILE_SERVER_API_KEY=your_file_server_api_key
 ```
 

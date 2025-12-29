@@ -2,7 +2,7 @@
 // Connects to Onpost-SaveFile server for image uploads
 
 const FILE_SERVER_URL =
-  process.env.NEXT_PUBLIC_FILE_SERVER_URL || "http://43.228.213.41:3001";
+  process.env.NEXT_PUBLIC_FILE_SERVER_URL || "https://api.haluai.my.id";
 const FILE_SERVER_API_KEY =
   process.env.FILE_SERVER_API_KEY || "onpost_file_api_k3y_2024_s3cur3";
 
