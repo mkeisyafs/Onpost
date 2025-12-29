@@ -275,6 +275,20 @@ export const posts = {
     await request(`/post/${id}`, { method: "DELETE" });
   },
 
+  // List all posts across all threads (for live feed optimization)
+  async listAll(params?: {
+    filter?: "newest" | "oldest";
+    cursor?: string;
+    limit?: number;
+  }): Promise<PostsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.filter) searchParams.set("filter", params.filter);
+    if (params?.cursor) searchParams.set("cursor", params.cursor);
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    const query = searchParams.toString();
+    return request<PostsResponse>(`/posts${query ? `?${query}` : ""}`);
+  },
+
   async getLikes(id: string): Promise<{
     likes: Array<{
       userId: string;

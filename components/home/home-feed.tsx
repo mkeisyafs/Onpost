@@ -72,74 +72,32 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
     setError(null);
 
     try {
-      // Fetch threads with moderate limit (15 threads max)
-      const threadsResponse = await forumsApi.threads.list({
-        limit: 15,
+      // Fetch posts directly from /posts endpoint (much more efficient!)
+      const postsResponse = await forumsApi.posts.listAll({
+        limit: 50,
         filter: "newest",
       });
 
-      if (!threadsResponse.threads || threadsResponse.threads.length === 0) {
+      if (!postsResponse.posts || postsResponse.posts.length === 0) {
         setPosts([]);
         postsCache = [];
         lastFetchTime = now;
         return;
       }
 
-      // Fetch posts from threads in batches to avoid API spam
-      const allPosts: ForumsPost[] = [];
-      const threads = threadsResponse.threads;
-      const BATCH_SIZE = 5; // Process 5 threads at a time
+      // Filter out replies (only show main posts)
+      const mainPosts = postsResponse.posts.filter(
+        (post) => !post.parentId && !post.parentPostId
+      );
 
-      for (let i = 0; i < threads.length; i += BATCH_SIZE) {
-        const batch = threads.slice(i, i + BATCH_SIZE);
-
-        const batchResults = await Promise.all(
-          batch.map(async (thread) => {
-            try {
-              const postsResponse = await forumsApi.posts.list(thread.id, {
-                limit: 20,
-                filter: "newest",
-              });
-              if (postsResponse.posts) {
-                const allThreadPosts = postsResponse.posts;
-
-                // Filter out replies and add thread info
-                return allThreadPosts
-                  .filter((post) => !post.parentId && !post.parentPostId)
-                  .map((post) => {
-                    const commentCount = allThreadPosts.filter(
-                      (p) =>
-                        p.parentId === post.id || p.parentPostId === post.id
-                    ).length;
-
-                    return {
-                      ...post,
-                      _threadTitle: thread.title,
-                      _threadId: thread.id,
-                      _threadViewCount: thread.viewCount || 0,
-                      _threadPostCount: thread.postCount || 0,
-                      _commentCount: commentCount,
-                    };
-                  });
-              }
-              return [];
-            } catch {
-              return [];
-            }
-          })
-        );
-
-        batchResults.forEach((threadPosts) => allPosts.push(...threadPosts));
-      }
-
-      // Sort by createdAt descending
-      allPosts.sort(
+      // Sort by createdAt descending (should already be sorted but just in case)
+      mainPosts.sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
 
       // Limit to 50 posts for performance
-      const finalPosts = allPosts.slice(0, 50);
+      const finalPosts = mainPosts.slice(0, 50);
 
       // Update cache
       postsCache = finalPosts;
