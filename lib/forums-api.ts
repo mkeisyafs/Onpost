@@ -49,14 +49,145 @@ export function getAccessToken(): string | null {
   return null;
 }
 
+// Humanize API error messages
+function humanizeError(status: number, endpoint: string, serverMessage?: string): string {
+  // If server provides a meaningful message (not just status code), use it
+  if (serverMessage && !serverMessage.includes("API Error:") && serverMessage.length > 0) {
+    return serverMessage;
+  }
+
+  // Auth-specific errors
+  if (endpoint.includes("/auth/login")) {
+    switch (status) {
+      case 400:
+        return "Invalid email or password. Please check your credentials and try again.";
+      case 401:
+        return "Incorrect email or password. Please try again.";
+      case 404:
+        return "Account not found. Please check your email or create a new account.";
+      case 429:
+        return "Too many login attempts. Please wait a moment and try again.";
+      default:
+        break;
+    }
+  }
+
+  if (endpoint.includes("/auth/register")) {
+    switch (status) {
+      case 400:
+        return "Please check your information. Make sure your email is valid and password meets the requirements.";
+      case 409:
+        return "An account with this email or username already exists. Please try signing in instead.";
+      case 422:
+        return "Invalid registration details. Please ensure all fields are filled correctly.";
+      default:
+        break;
+    }
+  }
+
+  if (endpoint.includes("/auth/forgot-password") || endpoint.includes("/auth/reset-password")) {
+    switch (status) {
+      case 400:
+        return "Invalid request. Please check your email address.";
+      case 404:
+        return "No account found with this email address.";
+      case 410:
+        return "This password reset link has expired. Please request a new one.";
+      default:
+        break;
+    }
+  }
+
+  // User profile update errors
+  if (endpoint.includes("/user/") && !endpoint.includes("/user/username/")) {
+    // Check for "can only update your own" type messages
+    if (serverMessage && serverMessage.toLowerCase().includes("only update your own")) {
+      return "Your session may have expired. Please try logging out and logging back in.";
+    }
+
+    switch (status) {
+      case 400:
+        return "Invalid profile data. Please check your input and try again.";
+      case 403:
+        return "Your session may have expired. Please try logging out and logging back in.";
+      case 404:
+        return "This user profile was not found.";
+      case 500:
+        // Server error - likely payload issue
+        return "Unable to update profile. Please try again or contact support if the issue persists.";
+      default:
+        break;
+    }
+  }
+
+  // Like/unlike errors
+  if (endpoint.includes("/likes")) {
+    switch (status) {
+      case 400:
+        return "Unable to process like. Please try again.";
+      case 401:
+        return "Please sign in to like posts.";
+      case 404:
+        return "This post was not found.";
+      default:
+        break;
+    }
+  }
+
+  // Thread creation errors
+  if (endpoint === "/thread" || endpoint.startsWith("/thread/")) {
+    switch (status) {
+      case 400:
+        return serverMessage || "Unable to create thread. Please check your title and content.";
+      case 401:
+        return "Please sign in to create threads.";
+      case 403:
+        return "You don't have permission to create threads.";
+      default:
+        break;
+    }
+  }
+
+  // Generic status code messages
+  switch (status) {
+    case 400:
+      return "Something went wrong with your request. Please check your information and try again.";
+    case 401:
+      return "Please sign in to continue.";
+    case 403:
+      return "You don't have permission to perform this action.";
+    case 404:
+      return "The requested item was not found.";
+    case 409:
+      return "This action conflicts with existing data. Please refresh and try again.";
+    case 422:
+      return "Please check your input and try again.";
+    case 429:
+      return "You're doing that too fast. Please wait a moment and try again.";
+    case 500:
+      return "Something went wrong on our end. Please try again later.";
+    case 502:
+    case 503:
+    case 504:
+      return "The service is temporarily unavailable. Please try again in a moment.";
+    default:
+      return "An unexpected error occurred. Please try again.";
+  }
+}
+
+interface RequestOptions extends RequestInit {
+  suppressErrorLogging?: boolean;
+}
+
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestOptions = {}
 ): Promise<T> {
+  const { suppressErrorLogging, ...fetchOptions } = options;
   const token = getAccessToken();
   const headers: HeadersInit = {
     "Content-Type": "application/json",
-    ...options.headers,
+    ...fetchOptions.headers,
   };
 
   if (token) {
@@ -65,13 +196,25 @@ async function request<T>(
 
   const baseUrl = getBaseUrl();
   const response = await fetch(`${baseUrl}${endpoint}`, {
-    ...options,
+    ...fetchOptions,
     headers,
   });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `API Error: ${response.status}`);
+
+    // Provide user-friendly error messages instead of raw API errors
+    if (response.status === 401) {
+      throw new Error("Your session has expired. Please sign in again.");
+    } else if (response.status === 403) {
+      throw new Error("You don't have permission to access this.");
+    } else if (response.status === 404) {
+      throw new Error("The content you're looking for was not found.");
+    } else if (response.status === 500) {
+      throw new Error("A server error occurred. Please try again later.");
+    }
+
+    throw new Error(error.message || "Something went wrong. Please try again.");
   }
 
   return response.json();
@@ -111,8 +254,10 @@ export const auth = {
     setAccessToken(null);
   },
 
-  async me(): Promise<ForumsUser> {
-    return request<ForumsUser>("/auth/me");
+  async me(options?: { suppressErrorLogging?: boolean }): Promise<ForumsUser> {
+    return request<ForumsUser>("/auth/me", {
+      suppressErrorLogging: options?.suppressErrorLogging,
+    });
   },
 
   async forgotPassword(email: string): Promise<{ resetToken: string }> {
@@ -263,9 +408,21 @@ export const posts = {
     await request(`/post/${id}`, { method: "DELETE" });
   },
 
-  async getLikes(
-    id: string
-  ): Promise<{
+  // List all posts across all threads (for live feed optimization)
+  async listAll(params?: {
+    filter?: "newest" | "oldest";
+    cursor?: string;
+    limit?: number;
+  }): Promise<PostsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.filter) searchParams.set("filter", params.filter);
+    if (params?.cursor) searchParams.set("cursor", params.cursor);
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    const query = searchParams.toString();
+    return request<PostsResponse>(`/posts${query ? `?${query}` : ""}`);
+  },
+
+  async getLikes(id: string): Promise<{
     likes: Array<{
       userId: string;
       user?: { id: string; displayName: string };
@@ -277,14 +434,14 @@ export const posts = {
   async like(id: string, userId?: string): Promise<void> {
     await request(`/post/${id}/likes`, {
       method: "POST",
-      body: JSON.stringify({ userId }),
+      body: userId ? JSON.stringify({ userId }) : JSON.stringify({}),
     });
   },
 
   async unlike(id: string, userId?: string): Promise<void> {
     await request(`/post/${id}/likes`, {
       method: "DELETE",
-      body: JSON.stringify({ userId }),
+      body: userId ? JSON.stringify({ userId }) : JSON.stringify({}),
     });
   },
 };
@@ -306,7 +463,8 @@ export const users = {
     id: string,
     data: {
       displayName?: string;
-      avatarUrl?: string;
+      bio?: string;
+      url?: string;
       extendedData?: UserExtendedData;
     }
   ): Promise<ForumsUser> {
@@ -349,6 +507,17 @@ export const users = {
       `/user/${userId}/threads${query ? `?${query}` : ""}`
     );
   },
+
+  async search(query: string): Promise<{ users: ForumsUser[] }> {
+    const searchParams = new URLSearchParams();
+    if (query) searchParams.set("q", query);
+    searchParams.set("limit", "20");
+
+    const queryString = searchParams.toString();
+    return request<{ users: ForumsUser[] }>(
+      `/users/search${queryString ? `?${queryString}` : ""}`
+    );
+  },
 };
 
 // ============================================
@@ -385,7 +554,11 @@ export const messages = {
     body: string;
     recipientId: string;
     parentMessageId?: string;
-    extendedData?: { linkedPostId?: string; linkedThreadId?: string };
+    extendedData?: {
+      linkedPostId?: string;
+      linkedThreadId?: string;
+      imageUrl?: string; // Support for image attachments
+    };
   }): Promise<ForumsPrivateMessage> {
     return request<ForumsPrivateMessage>("/private-message", {
       method: "POST",

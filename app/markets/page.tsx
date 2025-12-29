@@ -86,7 +86,7 @@ function MarketsContent() {
           ) : (
             <>
               <TrendingUp className="h-6 w-6 text-primary" />
-              <h1 className="text-2xl font-bold">Market Analytics</h1>
+              <h1 className="text-2xl font-bold">Market</h1>
             </>
           )}
         </div>
@@ -111,13 +111,6 @@ function MarketsContent() {
               >
                 <BarChart3 className="h-3.5 w-3.5" />
                 {stats.totalMarkets} active markets
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-600 border-green-500/20"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                {stats.withInsights} with AI insights
               </Badge>
             </>
           )}

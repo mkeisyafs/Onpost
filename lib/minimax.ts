@@ -1,58 +1,33 @@
-// MiniMax AI client for trade parsing and narrative generation
+// Kolosal AI client for trade parsing and narrative generation
+import OpenAI from "openai";
 
-const MINIMAX_BASE_URL =
-  process.env.MINIMAX_BASE_URL || "https://api.minimax.io/v1";
-const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY;
+// Initialize Kolosal client using OpenAI SDK
+const kolosalClient = new OpenAI({
+  apiKey: process.env.KOLOSAL_API_KEY || "",
+  baseURL: "https://api.kolosal.ai/v1",
+});
 
-interface MiniMaxMessage {
+interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
 
-interface MiniMaxCompletionRequest {
-  model: string;
-  messages: MiniMaxMessage[];
-  temperature?: number;
-  max_tokens?: number;
-}
-
-interface MiniMaxCompletionResponse {
-  choices: Array<{
-    message: {
-      content: string;
-    };
-  }>;
-}
-
 export async function minimaxChat(
-  messages: MiniMaxMessage[],
+  messages: ChatMessage[],
   options: { temperature?: number; maxTokens?: number } = {}
 ): Promise<string> {
-  if (!MINIMAX_API_KEY) {
-    throw new Error("MINIMAX_API_KEY is not configured");
+  if (!process.env.KOLOSAL_API_KEY) {
+    throw new Error("KOLOSAL_API_KEY is not configured");
   }
 
-  const response = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${MINIMAX_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "MiniMax-M2.1",
-      messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 1024,
-    } as MiniMaxCompletionRequest),
+  const completion = await kolosalClient.chat.completions.create({
+    model: "Qwen 3 30BA3B",
+    messages: messages,
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.maxTokens ?? 1024,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`MiniMax API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = (await response.json()) as MiniMaxCompletionResponse;
-  return data.choices[0]?.message?.content || "";
+  return completion.choices[0]?.message?.content || "";
 }
 
 export async function parseTradeWithAI(postBody: string): Promise<{
@@ -129,11 +104,16 @@ export async function generateMarketNarrative(
   },
   previousMetrics?: typeof metrics | null
 ): Promise<string> {
+  // Convert IDR to USD for narrative (assuming prices are in IDR)
+  const IDR_TO_USD = 15800;
+  const toUSD = (idr: number | undefined) =>
+    idr ? Math.round(idr / IDR_TO_USD) : 0;
+
   let prompt: string;
 
   if (marketType === "ITEM_MARKET" || marketType === "PHYSICAL_ITEM") {
     const medianChange = previousMetrics?.sellMedian
-      ? (metrics.sellMedian || 0) - previousMetrics.sellMedian
+      ? toUSD(metrics.sellMedian) - toUSD(previousMetrics.sellMedian)
       : 0;
     const volumeChange = previousMetrics?.totalCount
       ? (metrics.totalCount || 0) - previousMetrics.totalCount
@@ -145,42 +125,48 @@ export async function generateMarketNarrative(
     prompt = `Generate a brief market insight (2-3 sentences) for this ${marketLabel}:
 
 Current:
-- Sell: ${metrics.sellMedian?.toLocaleString() || "N/A"} IDR median (${
+- Sell: $${toUSD(metrics.sellMedian)} USD median (${
       metrics.sellCount || 0
     } listings)
-- Buy: ${metrics.buyMedian?.toLocaleString() || "N/A"} IDR median (${
+- Buy: $${toUSD(metrics.buyMedian)} USD median (${
       metrics.buyCount || 0
     } listings)
-- Spread: ${metrics.spread?.toLocaleString() || "N/A"} IDR
+- Spread: $${toUSD(metrics.spread)} USD
 - Trend: ${metrics.trend || "N/A"}
 
 ${
   previousMetrics
-    ? `Changes: Median ${
-        medianChange > 0 ? "+" : ""
-      }${medianChange.toLocaleString()}, Volume ${
+    ? `Changes: Median ${medianChange > 0 ? "+" : ""}$${medianChange}, Volume ${
         volumeChange > 0 ? "+" : ""
       }${volumeChange}`
     : ""
 }
 
-Be concise and data-driven.`;
+Be concise and data-driven. Always use USD for prices.`;
   } else if (marketType === "GENERAL") {
     prompt = `Generate a brief market insight (2-3 sentences) for this GENERAL MARKETPLACE:
 
 - Total: ${metrics.totalCount || 0} listings
-- Sell Median: ${metrics.sellMedian?.toLocaleString() || "N/A"} IDR
+- Sell Median: $${toUSD(metrics.sellMedian)} USD
 
-Focus on activity levels and pricing. Be concise.`;
+Focus on activity levels and pricing. Always use USD for prices. Be concise.`;
   } else {
+    // Account market - convert band medians to USD
+    const usdBands: Record<string, { median: number; count: number }> = {};
+    if (metrics.bands) {
+      for (const [key, value] of Object.entries(metrics.bands)) {
+        usdBands[key] = { median: toUSD(value.median), count: value.count };
+      }
+    }
+
     prompt = `Generate a brief market insight (2-3 sentences) for this ACCOUNT MARKET:
 
 - Total: ${metrics.totalCount || 0} listings
 - Demand Pressure: ${((metrics.demandPressure || 0) * 100).toFixed(0)}%
-- Bands: ${JSON.stringify(metrics.bands || {})}
+- Bands: ${JSON.stringify(usdBands)}
 - Value Drivers: ${metrics.topValueDrivers?.join(", ") || "N/A"}
 
-Focus on tier activity and demand vs supply. Be concise.`;
+Focus on tier activity and demand vs supply. Always use USD for prices. Be concise.`;
   }
 
   return minimaxChat(
@@ -188,7 +174,7 @@ Focus on tier activity and demand vs supply. Be concise.`;
       {
         role: "system",
         content:
-          "You are a market analyst. Provide brief, data-driven insights.",
+          "You are a market analyst. Provide brief, data-driven insights. Always express prices in USD.",
       },
       { role: "user", content: prompt },
     ],

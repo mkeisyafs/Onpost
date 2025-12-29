@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
@@ -43,16 +43,22 @@ import {
   Trash,
   Heart,
   Repeat2,
-  Share,
   X,
   Loader2,
   ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import forumsApi from "@/lib/forums-api";
+import { uploadImage, compressImage, uploadBase64Image } from "@/lib/file-api";
 import type { ForumsPost } from "@/lib/types";
 import { CommentModal } from "./comment-modal";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { cn } from "@/lib/utils";
+
+import { ImageViewer } from "@/components/ui/image-viewer";
+import { ImageCropper } from "@/components/ui/image-cropper";
+import { Badge } from "@/components/ui/badge";
 
 interface PostCardProps {
   post: ForumsPost;
@@ -60,11 +66,48 @@ interface PostCardProps {
   onUpdate?: () => void;
 }
 
-export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
+export function PostCard({
+  post: initialPost,
+  replies = [],
+  onUpdate,
+}: PostCardProps) {
   const { user: currentUser, isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
   const [showActions, setShowActions] = useState(false);
+  const [post, setPost] = useState(initialPost);
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  // Comment count state - starts with replies length, fetches actual count on mount
+  const [commentCount, setCommentCount] = useState(replies.length);
+
+  // Auto-fetch comment count on mount
+  useEffect(() => {
+    const fetchCommentCount = async () => {
+      try {
+        const response = await forumsApi.posts.list(initialPost.threadId, {
+          filter: "oldest",
+          limit: 100,
+        });
+        // Count posts that have this post as parent
+        const count = response.posts.filter(
+          (p) =>
+            p.parentId === initialPost.id || p.parentPostId === initialPost.id
+        ).length;
+        setCommentCount(count);
+      } catch (err) {
+        // Silently fail, keep current count
+      }
+    };
+
+    // Only fetch if replies weren't provided (count is 0)
+    if (replies.length === 0) {
+      fetchCommentCount();
+    }
+  }, [initialPost.id, initialPost.threadId, replies.length]);
+
+  // Crop state
+  const [croppingImage, setCroppingImage] = useState<string | null>(null);
 
   // Edit & Delete states
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -74,7 +117,11 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
     { url: string; file?: File; isExisting?: boolean }[]
   >([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploadingEdit, setIsUploadingEdit] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editIntent, setEditIntent] = useState<"WTS" | "WTB" | "WTT" | null>(
+    null
+  );
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
   const postAuthorId = post.authorId || post.userId || "";
@@ -84,6 +131,29 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
   const [isLiked, setIsLiked] = useState(
     post.likes?.some((like) => like.userId === currentUser?.id) || false
   );
+
+  // Callback when comments are updated
+  const handleCommentUpdate = () => {
+    setCommentCount((prev) => prev + 1);
+    onUpdate?.();
+  };
+
+  // Handle Edit Image Selection
+  const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      const url = URL.createObjectURL(file);
+      setCroppingImage(url);
+    }
+    if (editFileInputRef.current) {
+      editFileInputRef.current.value = "";
+    }
+  };
+
+  const handleCropComplete = async (croppedImageUrl: string) => {
+    setEditImages((prev) => [...prev, { url: croppedImageUrl }]);
+    setCroppingImage(null);
+  };
   const [isLiking, setIsLiking] = useState(false);
 
   // Handle Edit Post
@@ -93,52 +163,52 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
 
     setIsEditing(true);
     try {
-      // Compress and convert new images to base64
-      const compressImage = async (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-          const img = document.createElement("img");
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
+      // Upload new images to file server
+      const uploadedImageUrls: string[] = [];
+      const newImages = editImages.filter((img) => !img.isExisting);
+      const existingImages = editImages
+        .filter((img) => img.isExisting)
+        .map((img) => img.url);
 
-          img.onload = () => {
-            const MAX_WIDTH = 1024;
-            const MAX_HEIGHT = 1024;
-            let { width, height } = img;
-
-            if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-              const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
-              width = Math.round(width * ratio);
-              height = Math.round(height * ratio);
+      if (newImages.length > 0) {
+        setIsUploadingEdit(true);
+        for (const img of newImages) {
+          try {
+            if (img.file) {
+              const compressed = await compressImage(img.file, 1024, 0.8);
+              const result = await uploadImage(compressed);
+              uploadedImageUrls.push(result.url);
+            } else if (img.url.startsWith("data:")) {
+              const result = await uploadBase64Image(
+                img.url,
+                "edited-image.jpg"
+              );
+              uploadedImageUrls.push(result.url);
             }
-
-            canvas.width = width;
-            canvas.height = height;
-            ctx?.drawImage(img, 0, 0, width, height);
-            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
-            resolve(compressedBase64);
-          };
-
-          img.onerror = () => reject(new Error("Failed to load image"));
-          img.src = URL.createObjectURL(file);
-        });
-      };
-
-      const imageUrls = await Promise.all(
-        editImages.map(async (img) => {
-          if (img.file) {
-            return compressImage(img.file);
+          } catch (uploadErr) {
+            console.error("Failed to upload image:", uploadErr);
           }
-          return img.url;
-        })
-      );
+        }
+        setIsUploadingEdit(false);
+      }
 
-      await forumsApi.posts.update(post.id, {
-        body: editBody,
+      // Combine existing URLs with newly uploaded URLs
+      const allImageUrls = [...existingImages, ...uploadedImageUrls];
+
+      let finalBody = editBody.trim();
+      if (editIntent) {
+        finalBody += ` #${editIntent}`;
+      }
+
+      const updatedPost = await forumsApi.posts.update(post.id, {
+        body: finalBody,
         extendedData: {
           ...post.extendedData,
-          images: imageUrls.length > 0 ? imageUrls : undefined,
+          images: allImageUrls.length > 0 ? allImageUrls : undefined,
         },
       });
+
+      setPost(updatedPost);
       setShowEditDialog(false);
       onUpdate?.();
     } catch (error) {
@@ -146,23 +216,6 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
       alert("Failed to edit post. Please try again.");
     } finally {
       setIsEditing(false);
-    }
-  };
-
-  // Handle Edit Image Selection
-  const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach((file) => {
-      if (file.type.startsWith("image/")) {
-        const url = URL.createObjectURL(file);
-        setEditImages((prev) => [...prev, { url, file }]);
-      }
-    });
-
-    if (editFileInputRef.current) {
-      editFileInputRef.current.value = "";
     }
   };
 
@@ -180,7 +233,21 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
 
   // Initialize edit images when opening edit dialog
   const openEditDialog = () => {
-    setEditBody(post.body);
+    // Clean up [Image X] tags from legacy posts
+    let cleanBody = post.body.replace(/\n\n\[Image \d+\]\s*/g, "").trim();
+
+    // Detect and strip intent tag
+    const currentIntent = detectIntent(cleanBody);
+    if (currentIntent) {
+      setEditIntent(currentIntent);
+      cleanBody = cleanBody
+        .replace(new RegExp(`#${currentIntent}`, "gi"), "")
+        .trim();
+    } else {
+      setEditIntent(null);
+    }
+
+    setEditBody(cleanBody);
     // Load existing images
     const existingImages = (post.extendedData?.images || []).map(
       (url: string) => ({
@@ -396,32 +463,17 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
               {/* Image Grid - Facebook Style */}
               {images.length > 0 && (
                 <div className="mt-3 space-y-1">
-                  {/* Main Image - Full width, maintains aspect ratio */}
+                  {/* Main Image - Flexible Aspect Ratio */}
                   <button
                     type="button"
                     onClick={() => setLightboxImage(images[0])}
-                    className="relative w-full overflow-hidden rounded-xl border border-border bg-muted/50 transition-all duration-300 hover:brightness-95"
+                    className="relative w-full overflow-hidden rounded-xl border border-border bg-muted/50 transition-all duration-300 hover:brightness-95 flex justify-center bg-black/5"
                   >
-                    {images[0].startsWith("data:") ? (
-                      <img
-                        src={images[0] || "/placeholder.svg"}
-                        alt="Image 1"
-                        className="w-full max-h-[500px] object-contain"
-                      />
-                    ) : (
-                      <div
-                        className="relative w-full"
-                        style={{ minHeight: "200px", maxHeight: "500px" }}
-                      >
-                        <Image
-                          src={images[0] || "/placeholder.svg"}
-                          alt="Image 1"
-                          fill
-                          className="object-contain"
-                          sizes="(max-width: 768px) 100vw, 600px"
-                        />
-                      </div>
-                    )}
+                    <img
+                      src={images[0] || "/placeholder.svg"}
+                      alt="Image 1"
+                      className="w-auto mx-auto max-w-full max-h-[600px] object-contain"
+                    />
                   </button>
 
                   {/* Additional Images - Small thumbnails grid */}
@@ -489,19 +541,12 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
                       </span>
                     )}
                   </div>
-                  {((post as unknown as { commentCount?: number })
-                    .commentCount ?? 0) > 0 && (
-                    <button
-                      onClick={() => setShowCommentModal(true)}
-                      className="hover:underline"
-                    >
-                      {
-                        (post as unknown as { commentCount?: number })
-                          .commentCount
-                      }{" "}
-                      komentar
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {commentCount}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Action buttons row */}
@@ -515,7 +560,7 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
                       "flex-1 gap-2 rounded-none py-3 h-auto font-normal",
                       isLiked
                         ? "text-primary hover:bg-primary/10"
-                        : "text-muted-foreground hover:bg-muted"
+                        : "text-foreground/70 hover:bg-secondary hover:text-foreground"
                     )}
                   >
                     <Heart
@@ -527,18 +572,10 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
                     variant="ghost"
                     size="sm"
                     onClick={() => setShowCommentModal(true)}
-                    className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
+                    className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-foreground/70 hover:bg-secondary hover:text-foreground"
                   >
                     <MessageSquare className="h-5 w-5" />
                     <span>Comment</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
-                  >
-                    <Share className="h-5 w-5" />
-                    <span>Share</span>
                   </Button>
                 </div>
               </div>
@@ -552,7 +589,13 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
         open={!!lightboxImage}
         onOpenChange={() => setLightboxImage(null)}
       >
-        <DialogContent className="max-h-[90vh] max-w-[90vw] border-0 bg-transparent p-0 shadow-none">
+        <DialogContent
+          className="max-h-[90vh] max-w-[90vw] border-0 bg-transparent p-0 shadow-none"
+          showCloseButton={false}
+        >
+          <VisuallyHidden>
+            <DialogTitle>Image Preview</DialogTitle>
+          </VisuallyHidden>
           <button
             onClick={() => setLightboxImage(null)}
             className="absolute -right-2 -top-2 z-10 rounded-full bg-black/80 p-2 text-white hover:bg-black transition-colors"
@@ -568,13 +611,20 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
           )}
         </DialogContent>
       </Dialog>
+      <ImageViewer
+        isOpen={lightboxImage !== null}
+        onClose={() => setLightboxImage(null)}
+        images={images}
+        initialIndex={lightboxImage ? images.indexOf(lightboxImage) : 0}
+      />
 
       {/* Comment Modal */}
       <CommentModal
         post={post}
         isOpen={showCommentModal}
         onClose={() => setShowCommentModal(false)}
-        onUpdate={onUpdate}
+        onUpdate={handleCommentUpdate}
+        onCommentsLoaded={(count) => setCommentCount(count)}
       />
 
       {/* Edit Post Dialog */}
@@ -593,6 +643,47 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
               placeholder="What's on your mind?"
               className="min-h-[120px] resize-none"
             />
+
+            {/* Tag Selection */}
+            <div className="flex flex-wrap gap-2">
+              <Badge
+                variant={editIntent === "WTS" ? "default" : "outline"}
+                className={`cursor-pointer ${
+                  editIntent === "WTS" ? "bg-green-500 hover:bg-green-600" : ""
+                }`}
+                onClick={() =>
+                  setEditIntent((prev) => (prev === "WTS" ? null : "WTS"))
+                }
+              >
+                WTS
+              </Badge>
+              <Badge
+                variant={editIntent === "WTB" ? "default" : "outline"}
+                className={`cursor-pointer ${
+                  editIntent === "WTB"
+                    ? "bg-yellow-500 hover:bg-yellow-600 text-black hover:text-black"
+                    : ""
+                }`}
+                onClick={() =>
+                  setEditIntent((prev) => (prev === "WTB" ? null : "WTB"))
+                }
+              >
+                WTB
+              </Badge>
+              <Badge
+                variant={editIntent === "WTT" ? "default" : "outline"}
+                className={`cursor-pointer ${
+                  editIntent === "WTT"
+                    ? "bg-orange-500 hover:bg-orange-600"
+                    : ""
+                }`}
+                onClick={() =>
+                  setEditIntent((prev) => (prev === "WTT" ? null : "WTT"))
+                }
+              >
+                WTT
+              </Badge>
+            </div>
 
             {/* Image Previews */}
             {editImages.length > 0 && (
@@ -700,6 +791,16 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Image Cropper */}
+      {croppingImage && (
+        <ImageCropper
+          open={!!croppingImage}
+          onClose={() => setCroppingImage(null)}
+          imageSrc={croppingImage}
+          onCropComplete={handleCropComplete}
+          aspectRatio={undefined} // Start with free crop
+        />
+      )}
     </>
   );
 }

@@ -1,20 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import useSWR from "swr";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import {
-  MessageSquare,
-  Eye,
-  TrendingUp,
-  Lock,
-  ImageIcon,
-  Clock,
-} from "lucide-react";
-import forumsApi from "@/lib/forums-api";
+import { MessageSquare, Eye, TrendingUp, ImageIcon, Clock } from "lucide-react";
 import type { ForumsThread } from "@/lib/types";
+import useSWR from "swr";
+import forumsApi from "@/lib/forums-api";
 
 interface ThreadCardProps {
   thread: ForumsThread;
@@ -82,20 +75,26 @@ export function ThreadCard({ thread }: ThreadCardProps) {
   const market = thread.extendedData?.market;
   const coverImage = thread.extendedData?.coverImage;
   const threadIcon = thread.extendedData?.icon;
-  const hasMarketData = market?.marketEnabled && !market.analytics.locked;
+  const hasMarketData = market?.marketEnabled && !market?.analytics?.locked;
 
   const intent = detectIntent(thread.title, thread.body);
 
-  // Fetch posts to get actual count
+  // Fetch posts to get actual count (with error resilience)
   const { data: postsData } = useSWR(
     ["thread-posts-count", thread.id],
-    () => forumsApi.posts.list(thread.id, { limit: 1 }),
-    { revalidateOnFocus: false }
+    () => forumsApi.posts.list(thread.id, { limit: 100 }),
+    {
+      revalidateOnFocus: false,
+      // Don't spam retries on 500 errors
+      shouldRetryOnError: false,
+      errorRetryCount: 0,
+    }
   );
 
   // Use real data from thread or fetched data
   const viewCount = thread.viewCount || 0;
-  const postCount = postsData?.count ?? thread.postCount ?? 0;
+  // Use fetched posts length if available, otherwise fallback to thread.postCount
+  const postCount = postsData?.posts?.length ?? thread.postCount ?? 0;
 
   return (
     <Link
@@ -103,55 +102,59 @@ export function ThreadCard({ thread }: ThreadCardProps) {
       className="group block rounded-2xl border border-border bg-card overflow-hidden transition-all hover:shadow-xl hover:border-primary/30 hover:-translate-y-0.5"
     >
       {/* Cover with Intent Badge */}
-{/* Cover wrapper (JANGAN overflow-hidden) */}
-<div className="relative aspect-3/1 w-full bg-linear-to-br from-primary/10 via-muted to-primary/5 overflow-visible">
-  {/* Inner cover yang boleh overflow-hidden */}
-  <div className="absolute inset-0 overflow-hidden">
-    {coverImage ? (
-      <img
-        src={coverImage}
-        alt=""
-        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-      />
-    ) : (
-      <div className="h-full w-full flex items-center justify-center">
-        <ImageIcon className="h-8 w-8 text-muted-foreground/20" />
-      </div>
-    )}
-  </div>
-
-  {/* Intent Badge */}
-  {intent && (
-    <Badge
-      className={`absolute top-3 left-3 px-3 py-1 text-sm font-bold shadow-lg ${intentStyles[intent]}`}
-    >
-      {intentLabels[intent]}
-    </Badge>
-  )}
-
-  {/* Market Badge */}
-  {hasMarketData && (
-    <Badge className="absolute top-3 right-3 bg-primary/90 text-primary-foreground border-0 shadow-lg">
-      <TrendingUp className="mr-1 h-3 w-3" />
-      Market
-    </Badge>
-  )}
-
-  {/* Thread Icon (aman karena parent overflow-visible) */}
-  <div className="absolute -bottom-7 left-4 z-30">
-    <div className="h-14 w-14 rounded-xl overflow-hidden border-[3px] border-card bg-muted shadow-lg">
-      {threadIcon ? (
-        <img src={threadIcon} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <div className="h-full w-full flex items-center justify-center bg-linear-to-br from-primary/20 to-primary/5">
-          <span className="text-lg font-bold text-primary">
-            {thread.title.charAt(0).toUpperCase()}
-          </span>
+      {/* Cover wrapper (JANGAN overflow-hidden) */}
+      <div className="relative aspect-3/1 w-full bg-linear-to-br from-primary/10 via-muted to-primary/5 overflow-visible">
+        {/* Inner cover yang boleh overflow-hidden */}
+        <div className="absolute inset-0 overflow-hidden">
+          {coverImage ? (
+            <img
+              src={coverImage}
+              alt=""
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <div className="h-full w-full flex items-center justify-center">
+              <ImageIcon className="h-8 w-8 text-muted-foreground/20" />
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  </div>
-</div>
+
+        {/* Intent Badge */}
+        {intent && (
+          <Badge
+            className={`absolute top-3 left-3 px-3 py-1 text-sm font-bold shadow-lg ${intentStyles[intent]}`}
+          >
+            {intentLabels[intent]}
+          </Badge>
+        )}
+
+        {/* Market Badge */}
+        {hasMarketData && (
+          <Badge className="absolute top-3 right-3 bg-primary/90 text-primary-foreground border-0 shadow-lg">
+            <TrendingUp className="mr-1 h-3 w-3" />
+            Market
+          </Badge>
+        )}
+
+        {/* Thread Icon (aman karena parent overflow-visible) */}
+        <div className="absolute -bottom-7 left-4 z-30">
+          <div className="h-14 w-14 rounded-xl overflow-hidden border-[3px] border-card bg-muted shadow-lg">
+            {threadIcon ? (
+              <img
+                src={threadIcon}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center bg-linear-to-br from-primary/20 to-primary/5">
+                <span className="text-lg font-bold text-primary">
+                  {thread.title.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="p-4 pt-8">
         <div className="flex gap-3">
@@ -196,15 +199,19 @@ export function ThreadCard({ thread }: ThreadCardProps) {
 
         {/* Tags & Stats with Micro-interactions */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {thread.tags?.slice(0, 2).map((tag) => (
-            <Badge
-              key={tag}
-              variant="secondary"
-              className="text-xs px-2 py-0.5 rounded-full bg-muted/50"
-            >
-              #{tag}
-            </Badge>
-          ))}
+          {thread.tags?.slice(0, 2).map((tag) => {
+            const label = typeof tag === "string" ? tag : tag.name;
+            const tagKey = typeof tag === "string" ? tag : tag.id;
+            return (
+              <Badge
+                key={tagKey}
+                variant="secondary"
+                className="text-xs px-2 py-0.5 rounded-full bg-muted/50"
+              >
+                #{label}
+              </Badge>
+            );
+          })}
           {thread.tags && thread.tags.length > 2 && (
             <span className="text-xs text-muted-foreground">
               +{thread.tags.length - 2}

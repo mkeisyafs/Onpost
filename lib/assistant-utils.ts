@@ -44,18 +44,111 @@ const TAG_ALIASES: Record<string, string> = {
   // Blue Archive
   "blue archive": "blue-archive",
   ba: "blue-archive",
+
+  // ===== PHYSICAL ITEMS =====
+  // Shoes
+  shoes: "shoes",
+  shoe: "shoes",
+  sepatu: "shoes",
+  sneakers: "shoes",
+  sneaker: "shoes",
+  nike: "shoes",
+  adidas: "shoes",
+  "new balance": "shoes",
+  newbalance: "shoes",
+  jordan: "shoes",
+  vans: "shoes",
+  converse: "shoes",
+
+  // Clothing
+  clothing: "clothing",
+  clothes: "clothing",
+  baju: "clothing",
+  jacket: "clothing",
+  jaket: "clothing",
+  hoodie: "clothing",
+  shirt: "clothing",
+  kaos: "clothing",
+  pants: "clothing",
+  celana: "clothing",
+  jeans: "clothing",
+
+  // Electronics
+  electronics: "electronics",
+  elektronik: "electronics",
+  laptop: "electronics",
+  phone: "electronics",
+  hp: "electronics",
+  handphone: "electronics",
+  tablet: "electronics",
+  ipad: "electronics",
+  iphone: "electronics",
+  samsung: "electronics",
+  headphone: "electronics",
+  earphone: "electronics",
+  airpods: "electronics",
+  monitor: "electronics",
+  keyboard: "electronics",
+  mouse: "electronics",
+
+  // Gaming Peripherals
+  gaming: "gaming-gear",
+  "gaming gear": "gaming-gear",
+  console: "gaming-gear",
+  ps5: "gaming-gear",
+  ps4: "gaming-gear",
+  playstation: "gaming-gear",
+  xbox: "gaming-gear",
+  nintendo: "gaming-gear",
+  switch: "gaming-gear",
+
+  // Watches
+  watch: "watches",
+  watches: "watches",
+  jam: "watches",
+  "jam tangan": "watches",
+  rolex: "watches",
+  casio: "watches",
+  "g-shock": "watches",
+  gshock: "watches",
+  seiko: "watches",
+  smartwatch: "watches",
+  "apple watch": "watches",
+
+  // Bags
+  bag: "bags",
+  bags: "bags",
+  tas: "bags",
+  backpack: "bags",
+  ransel: "bags",
+
+  // Others
+  figurine: "collectibles",
+  figure: "collectibles",
+  "action figure": "collectibles",
+  collectible: "collectibles",
+  koleksi: "collectibles",
 };
 
-// All known game tags for suggestions
+// All known tags for suggestions (games + physical items)
 export const KNOWN_GAME_TAGS = [
-  { value: "uma-musume", label: "Uma Musume" },
-  { value: "genshin-impact", label: "Genshin Impact" },
-  { value: "mobile-legends", label: "Mobile Legends" },
-  { value: "valorant", label: "Valorant" },
-  { value: "roblox", label: "Roblox" },
-  { value: "honkai-star-rail", label: "Honkai Star Rail" },
-  { value: "wuthering-waves", label: "Wuthering Waves" },
-  { value: "blue-archive", label: "Blue Archive" },
+  // Games
+  { value: "uma-musume", label: "Uma Musume", category: "game" },
+  { value: "genshin-impact", label: "Genshin Impact", category: "game" },
+  { value: "mobile-legends", label: "Mobile Legends", category: "game" },
+  { value: "valorant", label: "Valorant", category: "game" },
+  { value: "roblox", label: "Roblox", category: "game" },
+  { value: "honkai-star-rail", label: "Honkai Star Rail", category: "game" },
+  { value: "wuthering-waves", label: "Wuthering Waves", category: "game" },
+  { value: "blue-archive", label: "Blue Archive", category: "game" },
+  // Physical Items
+  { value: "shoes", label: "Shoes/Sneakers", category: "physical" },
+  { value: "clothing", label: "Clothing", category: "physical" },
+  { value: "electronics", label: "Electronics", category: "physical" },
+  { value: "gaming-gear", label: "Gaming Gear", category: "physical" },
+  { value: "watches", label: "Watches", category: "physical" },
+  { value: "bags", label: "Bags", category: "physical" },
+  { value: "collectibles", label: "Collectibles", category: "physical" },
 ];
 
 // ============================================
@@ -67,7 +160,8 @@ export type AssistantIntent =
   | "PRICE_ANALYSIS"
   | "DEMAND_INSIGHT"
   | "LIST_RECENT"
-  | "CLARIFICATION";
+  | "CLARIFICATION"
+  | "CHAT_RESPONSE";
 
 export interface ParsedQuery {
   intent: AssistantIntent;
@@ -105,7 +199,9 @@ export interface AssistantListing {
   price: number | null;
   displayPrice: string | null;
   currency: string;
+  title: string;
   description: string;
+  intent: "WTS" | "WTB" | "WTT" | null;
   seller: {
     id: string;
     displayName: string;
@@ -136,6 +232,58 @@ export function extractGameTag(query: string): string | null {
   }
 
   return null;
+}
+
+// Extract search keywords for general search (no strict tag match)
+export function extractSearchKeywords(query: string): string[] {
+  // Remove common words and extract meaningful keywords
+  const stopWords = [
+    "find",
+    "search",
+    "show",
+    "list",
+    "get",
+    "cari",
+    "tampilkan",
+    "cheapest",
+    "murah",
+    "termurah",
+    "lowest",
+    "budget",
+    "the",
+    "a",
+    "an",
+    "for",
+    "in",
+    "on",
+    "at",
+    "to",
+    "of",
+    "yang",
+    "di",
+    "dari",
+    "untuk",
+    "dengan",
+    "wts",
+    "wtb",
+    "wtt",
+    "sell",
+    "buy",
+    "jual",
+    "beli",
+    "account",
+    "akun",
+    "item",
+    "items",
+  ];
+
+  const words = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !stopWords.includes(w));
+
+  return words;
 }
 
 // ============================================
@@ -233,8 +381,10 @@ export function parseQueryIntent(query: string): ParsedQuery {
     intent = "LIST_RECENT";
   }
 
-  // If no tag detected, ask for clarification
-  if (!tag) {
+  // Instead of requiring a tag, allow search with keywords
+  // Only ask for clarification if the query is too vague (no keywords at all)
+  const searchKeywords = extractSearchKeywords(query);
+  if (!tag && searchKeywords.length === 0) {
     return {
       intent: "CLARIFICATION",
       tag: null,
@@ -465,14 +615,31 @@ export function postToListing(post: ForumsPost): AssistantListing {
     (postAny["userName"] as string) ||
     "View Seller";
 
+  // Extract intent from body or trade data
+  let postIntent: "WTS" | "WTB" | "WTT" | null = trade?.intent || null;
+  if (!postIntent) {
+    const bodyUpper = post.body.toUpperCase();
+    if (bodyUpper.includes("#WTS") || bodyUpper.includes("WTS"))
+      postIntent = "WTS";
+    else if (bodyUpper.includes("#WTB") || bodyUpper.includes("WTB"))
+      postIntent = "WTB";
+    else if (bodyUpper.includes("#WTT") || bodyUpper.includes("WTT"))
+      postIntent = "WTT";
+  }
+
+  // Generate title from first line of body
+  const title = post.body.split("\n")[0].slice(0, 80) || "Trade Listing";
+
   return {
     postId: post.id,
     threadId: post.threadId,
     price: price,
     displayPrice: displayPrice,
-    currency: trade?.currency || "IDR",
+    currency: trade?.currency || "USD",
+    title: title,
     description:
       post.body.slice(0, 150) + (post.body.length > 150 ? "..." : ""),
+    intent: postIntent,
     seller: {
       id: post.authorId || post.userId || "",
       displayName: sellerName,
@@ -485,17 +652,31 @@ export function postToListing(post: ForumsPost): AssistantListing {
 // ============================================
 // Format Price for Display
 // ============================================
+// Exchange rate for IDR to USD (approximate)
+const IDR_TO_USD_RATE = 15800;
 
-export function formatPrice(price: number, currency: string = "IDR"): string {
-  if (currency === "USD") {
-    return `$${price.toLocaleString()}`;
+export function formatPrice(price: number, currency: string = "USD"): string {
+  // Convert to USD
+  let usdPrice = price;
+
+  // If labeled as IDR, convert to USD
+  if (currency === "IDR") {
+    usdPrice = price / IDR_TO_USD_RATE;
   }
-  // IDR formatting
-  if (price >= 1000000) {
-    return `${(price / 1000000).toFixed(1)}jt`;
+  // If labeled as USD but price is suspiciously high (likely stored as IDR),
+  // also convert. This handles legacy data where normalizedPrice was in IDR
+  // but currency was labeled "USD"
+  else if (currency === "USD" && price > 10000) {
+    usdPrice = price / IDR_TO_USD_RATE;
   }
-  if (price >= 1000) {
-    return `${Math.round(price / 1000)}rb`;
+
+  // Format as USD
+  if (usdPrice >= 1000) {
+    return `$${(usdPrice / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   }
-  return price.toLocaleString();
+
+  return `$${usdPrice.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: usdPrice < 10 ? 2 : 0,
+  })}`;
 }

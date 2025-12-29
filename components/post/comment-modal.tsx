@@ -15,14 +15,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Heart,
   MessageSquare,
-  Share,
   Send,
   ImageIcon,
   Smile,
   X,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import forumsApi from "@/lib/forums-api";
+import { uploadImage, compressImage } from "@/lib/file-api";
 import type { ForumsPost, ForumsUser } from "@/lib/types";
 import Link from "next/link";
 
@@ -31,6 +33,8 @@ interface CommentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate?: () => void;
+  onCommentsLoaded?: (count: number) => void;
+  onLikeUpdate?: (isLiked: boolean, likeCount: number) => void;
 }
 
 interface Comment {
@@ -54,29 +58,82 @@ export function CommentModal({
   isOpen,
   onClose,
   onUpdate,
+  onCommentsLoaded,
+  onLikeUpdate,
 }: CommentModalProps) {
   const { user, isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
   const [comments, setComments] = useState<Comment[]>([]);
   const [replies, setReplies] = useState<Record<string, Comment[]>>({});
   const [loading, setLoading] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [commentImage, setCommentImage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingComment, setUploadingComment] = useState(false);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyImage, setReplyImage] = useState<string | null>(null);
+  const [replyImageFile, setReplyImageFile] = useState<File | null>(null);
   const [submittingReply, setSubmittingReply] = useState(false);
+  const [uploadingReply, setUploadingReply] = useState(false);
+  const [commentImageFile, setCommentImageFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const replyImageInputRef = useRef<HTMLInputElement>(null);
 
+  // Like state for the post
+  const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
+  const [isLiked, setIsLiked] = useState(
+    post.likes?.some((like) => like.userId === user?.id) || false
+  );
+  const [isLiking, setIsLiking] = useState(false);
+
   const postAuthor = post.author || post.user;
   const postAuthorId = post.authorId || post.userId || "";
+
+  // Handle Like for the post
+  const handleLikePost = async () => {
+    if (!isAuthenticated || isLiking) {
+      if (!isAuthenticated) {
+        openAuthModal("signin");
+      }
+      return;
+    }
+
+    setIsLiking(true);
+    const wasLiked = isLiked;
+
+    // Optimistic update
+    const newIsLiked = !wasLiked;
+    const newLikeCount = wasLiked ? likeCount - 1 : likeCount + 1;
+    setIsLiked(newIsLiked);
+    setLikeCount(newLikeCount);
+
+    try {
+      if (wasLiked) {
+        await forumsApi.posts.unlike(post.id);
+      } else {
+        await forumsApi.posts.like(post.id);
+      }
+      // Call like update callback to sync with parent
+      onLikeUpdate?.(newIsLiked, newLikeCount);
+    } catch (error) {
+      // Revert on error
+      setIsLiked(wasLiked);
+      setLikeCount(likeCount);
+      console.error("Failed to update like:", error);
+    } finally {
+      setIsLiking(false);
+    }
+  };
 
   // Fetch comments (child posts)
   useEffect(() => {
     if (isOpen) {
       fetchComments();
+      // Reset like state when modal opens with fresh post data
+      setLikeCount(post.likes?.length || 0);
+      setIsLiked(post.likes?.some((like) => like.userId === user?.id) || false);
     }
   }, [isOpen, post.id]);
 
@@ -106,6 +163,9 @@ export function CommentModal({
 
       setComments(topLevelComments as Comment[]);
       setReplies(repliesMap);
+
+      // Notify parent of actual comment count
+      onCommentsLoaded?.(topLevelComments.length);
     } catch (err) {
       console.error("Failed to fetch comments:", err);
     } finally {
@@ -113,39 +173,7 @@ export function CommentModal({
     }
   };
 
-  // Image compression
-  const compressImage = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const maxSize = 800;
-          let { width, height } = img;
-
-          if (width > height && width > maxSize) {
-            height = (height * maxSize) / width;
-            width = maxSize;
-          } else if (height > maxSize) {
-            width = (width * maxSize) / height;
-            height = maxSize;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", 0.8));
-        };
-        img.onerror = reject;
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
+  // Image selection - now stores file for upload
   const handleImageSelect = async (
     e: React.ChangeEvent<HTMLInputElement>,
     isReply = false
@@ -153,33 +181,53 @@ export function CommentModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      const compressed = await compressImage(file);
-      if (isReply) {
-        setReplyImage(compressed);
-      } else {
-        setCommentImage(compressed);
-      }
-    } catch (err) {
-      console.error("Failed to process image:", err);
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(file);
+    if (isReply) {
+      setReplyImage(previewUrl);
+      setReplyImageFile(file);
+    } else {
+      setCommentImage(previewUrl);
+      setCommentImageFile(file);
     }
   };
 
   const handleSubmitComment = async () => {
-    if ((!newComment.trim() && !commentImage) || !isAuthenticated || submitting)
+    if (
+      (!newComment.trim() && !commentImageFile) ||
+      !isAuthenticated ||
+      submitting
+    )
       return;
 
     setSubmitting(true);
     try {
+      // Upload image to file server if present
+      let uploadedImageUrl: string | undefined;
+      if (commentImageFile) {
+        setUploadingComment(true);
+        try {
+          const compressed = await compressImage(commentImageFile, 800, 0.8);
+          const result = await uploadImage(compressed);
+          uploadedImageUrl = result.url;
+        } catch (uploadErr) {
+          console.error("Failed to upload image:", uploadErr);
+        }
+        setUploadingComment(false);
+      }
+
       await forumsApi.posts.create({
         threadId: post.threadId,
         body: newComment.trim(),
         userId: user?.id,
         parentId: post.id,
-        extendedData: commentImage ? { images: [commentImage] } : undefined,
+        extendedData: uploadedImageUrl
+          ? { images: [uploadedImageUrl] }
+          : undefined,
       });
       setNewComment("");
       setCommentImage(null);
+      setCommentImageFile(null);
       await fetchComments();
       onUpdate?.();
     } catch (err) {
@@ -191,7 +239,7 @@ export function CommentModal({
 
   const handleSubmitReply = async (parentCommentId: string) => {
     if (
-      (!replyText.trim() && !replyImage) ||
+      (!replyText.trim() && !replyImageFile) ||
       !isAuthenticated ||
       submittingReply
     )
@@ -199,15 +247,32 @@ export function CommentModal({
 
     setSubmittingReply(true);
     try {
+      // Upload image to file server if present
+      let uploadedImageUrl: string | undefined;
+      if (replyImageFile) {
+        setUploadingReply(true);
+        try {
+          const compressed = await compressImage(replyImageFile, 800, 0.8);
+          const result = await uploadImage(compressed);
+          uploadedImageUrl = result.url;
+        } catch (uploadErr) {
+          console.error("Failed to upload image:", uploadErr);
+        }
+        setUploadingReply(false);
+      }
+
       await forumsApi.posts.create({
         threadId: post.threadId,
         body: replyText.trim(),
         userId: user?.id,
         parentId: parentCommentId,
-        extendedData: replyImage ? { images: [replyImage] } : undefined,
+        extendedData: uploadedImageUrl
+          ? { images: [uploadedImageUrl] }
+          : undefined,
       });
       setReplyText("");
       setReplyImage(null);
+      setReplyImageFile(null);
       setReplyingTo(null);
       await fetchComments();
       onUpdate?.();
@@ -283,7 +348,6 @@ export function CommentModal({
                 addSuffix: true,
               })}
             </span>
-            <button className="hover:underline font-medium">Like</button>
             {!isReply && (
               <button
                 className="hover:underline font-medium"
@@ -446,8 +510,13 @@ export function CommentModal({
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-border text-sm text-muted-foreground">
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1">
-                  <Heart className="h-4 w-4" />
-                  {post.likes?.length || 0} likes
+                  {likeCount > 0 && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500">
+                      <Heart className="h-3 w-3 fill-white text-white" />
+                    </span>
+                  )}
+                  {likeCount > 0 ? likeCount : <Heart className="h-4 w-4" />}{" "}
+                  {likeCount === 0 && "0"} likes
                 </span>
                 <span>{comments.length} comments</span>
               </div>
@@ -455,9 +524,14 @@ export function CommentModal({
 
             {/* Action Buttons */}
             <div className="flex items-center justify-around mt-3 pt-3 border-t border-border">
-              <Button variant="ghost" className="flex-1 gap-2">
-                <Heart className="h-5 w-5" />
-                Like
+              <Button
+                variant="ghost"
+                className={`flex-1 gap-2 ${isLiked ? "text-red-500" : ""}`}
+                onClick={handleLikePost}
+                disabled={isLiking}
+              >
+                <Heart className={`h-5 w-5 ${isLiked ? "fill-current" : ""}`} />
+                {isLiked ? "Liked" : "Like"}
               </Button>
               <Button
                 variant="ghost"
@@ -466,10 +540,6 @@ export function CommentModal({
               >
                 <MessageSquare className="h-5 w-5" />
                 Comment
-              </Button>
-              <Button variant="ghost" className="flex-1 gap-2">
-                <Share className="h-5 w-5" />
-                Share
               </Button>
             </div>
           </div>
@@ -567,9 +637,12 @@ export function CommentModal({
             </div>
           ) : (
             <div className="text-center py-2">
-              <Link href="/login" className="text-primary hover:underline">
+              <button
+                onClick={() => openAuthModal("signin")}
+                className="text-primary hover:underline"
+              >
                 Sign in to comment
-              </Link>
+              </button>
             </div>
           )}
         </div>

@@ -33,8 +33,8 @@ import type {
 import { CommentModal } from "@/components/post/comment-modal";
 import forumsApi from "@/lib/forums-api";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import type { ForumsPost } from "@/lib/types";
-import Link from "next/link";
 
 // ============================================
 // Types
@@ -59,12 +59,22 @@ export function AIMarketAssistant() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [selectedListing, setSelectedListing] =
     useState<AssistantListing | null>(null);
   const [selectedPost, setSelectedPost] = useState<ForumsPost | null>(null);
   const [isLoadingPost, setIsLoadingPost] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
+
+  // Detect mobile on mount and handle resize
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Load messages from localStorage on mount
   useEffect(() => {
@@ -124,10 +134,19 @@ export function AIMarketAssistant() {
     setIsLoading(true);
 
     try {
+      // Build conversation history for context
+      const conversationHistory = messages.slice(-6).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
       const response = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({
+          query,
+          conversationHistory,
+        }),
       });
 
       const data: AssistantResponse = await response.json();
@@ -136,7 +155,7 @@ export function AIMarketAssistant() {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.summary || data.message || "Here's what I found:",
+        content: data.message || data.summary || "Here's what I found:",
         response: data,
         timestamp: new Date().toISOString(),
       };
@@ -198,9 +217,6 @@ export function AIMarketAssistant() {
     setSelectedPost(null);
   };
 
-  // Mobile: collapsible
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
-
   return (
     <>
       <Card className="border-border bg-card overflow-hidden">
@@ -258,9 +274,10 @@ export function AIMarketAssistant() {
                 <p className="text-xs text-muted-foreground">Try asking:</p>
                 <div className="space-y-2">
                   {[
-                    "Find the cheapest Uma Musume account",
-                    "Analyze price range for Genshin accounts",
-                    "Show WTB requests for Mobile Legends",
+                    "Find the cheapest Nike shoes",
+                    "Cari sepatu New Balance",
+                    "Show iPhone listings",
+                    "Analyze Genshin account prices",
                   ].map((suggestion) => (
                     <button
                       key={suggestion}
@@ -275,10 +292,15 @@ export function AIMarketAssistant() {
                 {/* Quick tags */}
                 <div className="pt-3 border-t border-border/50">
                   <p className="text-xs text-muted-foreground mb-2">
-                    Popular games:
+                    Popular categories:
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {KNOWN_GAME_TAGS.slice(0, 4).map((tag) => (
+                    {[
+                      { value: "shoes", label: "Shoes" },
+                      { value: "electronics", label: "Electronics" },
+                      { value: "genshin-impact", label: "Genshin" },
+                      { value: "mobile-legends", label: "ML" },
+                    ].map((tag) => (
                       <Badge
                         key={tag.value}
                         variant="outline"
@@ -340,12 +362,12 @@ export function AIMarketAssistant() {
               <p className="text-sm text-muted-foreground mb-2">
                 Sign in to use AI Assistant
               </p>
-              <Link
-                href="/login"
+              <button
+                onClick={() => openAuthModal("signin")}
                 className="text-sm text-primary hover:underline font-medium"
               >
                 Sign In →
-              </Link>
+              </button>
             </div>
           )}
         </CardContent>
@@ -424,6 +446,39 @@ function MessageBubble({
     return (
       <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-3 py-2">
         {response.message}
+      </div>
+    );
+  }
+
+  // CHAT_RESPONSE - show message first, then any listings
+  if (response?.type === "CHAT_RESPONSE") {
+    return (
+      <div className="space-y-2">
+        {/* AI Message */}
+        <div className="bg-muted text-sm rounded-lg px-3 py-2 whitespace-pre-wrap">
+          {message.content}
+        </div>
+
+        {/* Listings if available */}
+        {response?.listings && response.listings.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Related listings:</p>
+            {response.listings.slice(0, 5).map((listing) => (
+              <ListingCard
+                key={listing.postId}
+                listing={listing}
+                onClick={() => onListingClick(listing)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Metadata */}
+        {response?.matched !== undefined && response.matched > 0 && (
+          <p className="text-xs text-muted-foreground pl-2">
+            📊 Found {response.matched} relevant posts
+          </p>
+        )}
       </div>
     );
   }

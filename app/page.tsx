@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 import { HomeFeed } from "@/components/home/home-feed";
 import { AIMarketAssistant } from "@/components/home/ai-market-assistant";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Flame, TrendingUp, Clock, MessageSquare } from "lucide-react";
+import { Flame, TrendingUp, Clock, MessageSquare, Plus } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
 
 interface FeedStats {
@@ -15,16 +17,24 @@ interface FeedStats {
   trendingTags: { tag: string; count: number }[];
 }
 
+// Stats cache to prevent spam
+let statsCache: FeedStats | null = null;
+let statsLastFetchTime = 0;
+const STATS_MIN_FETCH_INTERVAL = 30 * 1000; // 30 seconds
+
 export default function HomePage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [stats, setStats] = useState<FeedStats>({
-    activeToday: 0,
-    newPosts: 0,
-    negotiations: 0,
-    trendingTags: [],
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<FeedStats>(
+    statsCache || {
+      activeToday: 0,
+      newPosts: 0,
+      negotiations: 0,
+      trendingTags: [],
+    }
+  );
+  const [isLoading, setIsLoading] = useState(!statsCache);
+  const lastRefreshKey = useRef(refreshKey);
 
   // Check onboarding visibility on client side only
   useEffect(() => {
@@ -34,11 +44,24 @@ export default function HomePage() {
 
   const handlePostCreated = () => {
     setRefreshKey((prev) => prev + 1);
-    // Also refresh stats
-    fetchStats();
+    // Also refresh stats (force refresh)
+    fetchStats(true);
   };
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async (forceRefresh = false) => {
+    const now = Date.now();
+
+    // Skip if not enough time has passed and we have cached data (unless forced)
+    if (
+      !forceRefresh &&
+      statsCache &&
+      now - statsLastFetchTime < STATS_MIN_FETCH_INTERVAL
+    ) {
+      setStats(statsCache);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await forumsApi.threads.list({
         limit: 50,
@@ -46,8 +69,8 @@ export default function HomePage() {
       });
 
       if (response.threads) {
-        const now = new Date();
-        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const nowTime = new Date();
+        const oneDayAgo = new Date(nowTime.getTime() - 24 * 60 * 60 * 1000);
 
         // Count threads created today
         const threadsToday = response.threads.filter(
@@ -88,23 +111,29 @@ export default function HomePage() {
           .sort((a, b) => b.count - a.count)
           .slice(0, 4);
 
-        setStats({
+        const newStats = {
           activeToday: response.threads.length,
           newPosts: totalPosts,
           negotiations: totalWtb,
           trendingTags,
-        });
+        };
+
+        // Update cache
+        statsCache = newStats;
+        statsLastFetchTime = now;
+
+        setStats(newStats);
       }
     } catch (error) {
       console.error("Failed to fetch stats:", error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [fetchStats]);
 
   return (
     <div className="w-full px-4 py-6 lg:px-6">
@@ -134,13 +163,6 @@ export default function HomePage() {
               >
                 <TrendingUp className="h-3.5 w-3.5" />
                 {stats.activeToday} active markets
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 border-blue-500/20"
-              >
-                <Clock className="h-3.5 w-3.5" />
-                {stats.newPosts} total posts
               </Badge>
               {stats.negotiations > 0 && (
                 <Badge
@@ -266,6 +288,19 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Mobile Floating Create Thread Button */}
+      <div className="fixed bottom-20 right-4 z-50 lg:hidden">
+        <Button
+          asChild
+          size="icon"
+          className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90"
+        >
+          <Link href="/thread/new">
+            <Plus className="h-6 w-6" />
+          </Link>
+        </Button>
       </div>
     </div>
   );

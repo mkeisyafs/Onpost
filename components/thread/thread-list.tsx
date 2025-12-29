@@ -40,6 +40,8 @@ export function ThreadList({
       }),
     {
       revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60000, // Don't refetch for 60 seconds
     }
   );
 

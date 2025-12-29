@@ -15,7 +15,8 @@ export interface ForumsUser {
   signature?: string;
   url?: string;
   avatarUrl?: string | null;
-  createdAt?: string;
+  createdAt: string;
+  updatedAt?: string;
   extendedData?: UserExtendedData;
 }
 
@@ -29,13 +30,14 @@ export interface ForumsThread {
   user?: ForumsUser;
   author?: ForumsUser;
   categoryId?: string;
-  tags: string[];
+  tags: (string | Tag)[];
   isPinned?: boolean;
   isLocked?: boolean;
   pinned?: boolean;
   locked?: boolean;
   postCount?: number;
   viewCount?: number;
+  likeCount?: number;
   createdAt: string;
   updatedAt: string;
   extendedData?: ThreadExtendedData;
@@ -66,9 +68,12 @@ export interface ForumsPrivateMessage {
   sender?: ForumsUser;
   recipientId: string;
   recipient?: ForumsUser;
-  parentMessageId: string | null;
-  isRead: boolean;
+  parentMessageId?: string | null;
+  // API may return either 'read' or 'isRead'
+  read?: boolean;
+  isRead?: boolean;
   createdAt: string;
+  updatedAt?: string;
   extendedData?: PMExtendedData;
 }
 
@@ -118,6 +123,7 @@ export interface PostExtendedData {
   homeFeed?: boolean; // true if created from Home feed
   tags?: string[]; // Game/category tags
   linkedThreadId?: string; // Auto-linked market thread (for analytics)
+  likedBy?: string[]; // User IDs who liked this post
 }
 
 // Thread Market Data
@@ -154,36 +160,40 @@ export interface AccountMarketSnapshot {
 
 export interface ThreadMarketData {
   marketEnabled: boolean;
+  insightsEnabled?: boolean; // Admin flag to enable insights without threshold
+  marketHidden?: boolean; // Admin flag to completely hide market tab
+  insightsHidden?: boolean; // Admin flag to completely hide insights tab
   marketTypeFinal:
     | "ITEM_MARKET"
     | "ACCOUNT_MARKET"
     | "PHYSICAL_ITEM"
     | "GENERAL"
     | null;
-  marketTypeCandidate:
+  // Optional fields - computed server-side
+  marketTypeCandidate?:
     | "ITEM_MARKET"
     | "ACCOUNT_MARKET"
     | "PHYSICAL_ITEM"
     | "GENERAL"
     | "UNKNOWN";
-  windowDays: number;
-  thresholdValid: number;
-  validCount: number;
-  lastWindowCutoffAt: number;
-  lastProcessed: {
+  windowDays?: number;
+  thresholdValid?: number;
+  validCount?: number;
+  lastWindowCutoffAt?: number;
+  lastProcessed?: {
     mode: "NEWEST" | "OLDEST";
     cursor: string | null;
     lastPostIdProcessed: string;
     at: number;
   };
-  classification: {
+  classification?: {
     confidence: number;
     method: "RULE" | "AI";
     version: string;
     classifiedAt: number;
     lockedAt: number | null;
   };
-  analytics: {
+  analytics?: {
     locked: boolean;
     updatedAt: number;
     snapshot: MarketSnapshot | AccountMarketSnapshot | null;
@@ -198,6 +208,7 @@ export interface ThreadExtendedData {
   coverImage?: string;
   icon?: string;
   category?: "game-items" | "accounts" | "physical" | "services";
+  images?: string[];
 }
 
 // User Trust Data
@@ -216,6 +227,7 @@ export interface UserExtendedData {
 export interface PMExtendedData {
   linkedPostId?: string;
   linkedThreadId?: string;
+  imageUrl?: string; // Support for image attachments
 }
 
 // ============================================
@@ -241,7 +253,7 @@ export interface PostsResponse {
 }
 
 export interface MessagesResponse {
-  messages: ForumsPrivateMessage[];
+  privateMessages: ForumsPrivateMessage[];
   nextMessageCursor: string | null;
 }
 

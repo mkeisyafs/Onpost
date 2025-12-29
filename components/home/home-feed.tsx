@@ -1,96 +1,205 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import forumsApi from "@/lib/forums-api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Heart, MessageSquare, Share, Eye } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import Link from "next/link";
-import { CommentModal } from "@/components/post/comment-modal";
-import { useAuth } from "@/lib/auth-context";
-import { cn } from "@/lib/utils";
-import type { ForumsPost, ForumsThread } from "@/lib/types";
-
-const intentStyles: Record<string, string> = {
-  WTS: "bg-green-500 text-white",
-  WTB: "bg-yellow-500 text-black",
-  WTT: "bg-orange-500 text-white",
-};
+import {
+  FeedPostCard,
+  type ExtendedPost,
+} from "@/components/post/feed-post-card";
+import type { ForumsPost } from "@/lib/types";
+import { RefreshCw } from "lucide-react";
 
 interface HomeFeedProps {
   refreshKey?: number;
 }
 
+// Minimum interval between fetches (60 seconds - increased for optimization)
+const MIN_FETCH_INTERVAL = 60 * 1000;
+
+// Cache for storing fetched data
+let postsCache: ForumsPost[] | null = null;
+let lastFetchTime = 0;
+let isFetching = false; // Prevent concurrent fetches
+
 export function HomeFeed({ refreshKey }: HomeFeedProps) {
-  const [posts, setPosts] = useState<ForumsPost[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [posts, setPosts] = useState<ForumsPost[]>(postsCache || []);
+  const [isLoading, setIsLoading] = useState(!postsCache);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch posts from all threads and combine them
-  useEffect(() => {
-    const fetchPosts = async () => {
+  // Pull-to-refresh state
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef(0);
+  const lastRefreshKey = useRef(refreshKey);
+
+  const PULL_THRESHOLD = 80; // pixels to trigger refresh
+
+  // Core fetch function with cache, throttling, and deduplication
+  const fetchPosts = useCallback(async (forceRefresh = false) => {
+    const now = Date.now();
+
+    // Skip if currently fetching (prevent concurrent requests)
+    if (isFetching) {
+      return;
+    }
+
+    // Skip if not enough time has passed and we have cached data (unless forced)
+    if (
+      !forceRefresh &&
+      postsCache &&
+      now - lastFetchTime < MIN_FETCH_INTERVAL
+    ) {
+      setPosts(postsCache);
+      setIsLoading(false);
+      return;
+    }
+
+    // Mark as fetching
+    isFetching = true;
+
+    // Set loading state appropriately
+    if (!postsCache) {
       setIsLoading(true);
-      setError(null);
+    } else {
+      setIsRefreshing(true);
+    }
+    setError(null);
 
-      try {
-        // Fetch recent threads
-        const threadsResponse = await forumsApi.threads.list({
-          limit: 10,
-          filter: "newest",
-        });
+    try {
+      // Fetch posts directly from /posts endpoint (much more efficient!)
+      const postsResponse = await forumsApi.posts.listAll({
+        limit: 50,
+        filter: "newest",
+      });
 
-        if (!threadsResponse.threads || threadsResponse.threads.length === 0) {
-          setPosts([]);
-          return;
-        }
-
-        // Fetch posts from each thread and combine
-        const allPosts: ForumsPost[] = [];
-
-        for (const thread of threadsResponse.threads.slice(0, 5)) {
-          try {
-            const postsResponse = await forumsApi.posts.list(thread.id, {
-              limit: 10,
-              filter: "newest",
-            });
-            if (postsResponse.posts) {
-              // Filter out replies (posts with parentId) and add thread info to each post for display
-              const postsWithThread = postsResponse.posts
-                .filter((post) => !post.parentId && !post.parentPostId)
-                .map((post) => ({
-                  ...post,
-                  _threadTitle: thread.title,
-                  _threadId: thread.id,
-                  _threadViewCount: thread.viewCount || 0,
-                  _threadPostCount: thread.postCount || 0,
-                }));
-              allPosts.push(...postsWithThread);
-            }
-          } catch {
-            // Skip threads that fail to load posts
-          }
-        }
-
-        // Sort by createdAt descending
-        allPosts.sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-
-        setPosts(allPosts.slice(0, 20));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load feed");
-      } finally {
-        setIsLoading(false);
+      if (!postsResponse.posts || postsResponse.posts.length === 0) {
+        setPosts([]);
+        postsCache = [];
+        lastFetchTime = now;
+        return;
       }
-    };
 
-    fetchPosts();
-  }, [refreshKey]);
+      // Filter out replies (only show main posts)
+      const mainPosts = postsResponse.posts.filter(
+        (post) => !post.parentId && !post.parentPostId
+      );
+
+      // Calculate comment counts for each main post
+      // A comment is any post that has this post as parentId
+      const allPosts = postsResponse.posts;
+      const postsWithCommentCount = mainPosts.map((post) => {
+        const commentCount = allPosts.filter(
+          (p) => p.parentId === post.id || p.parentPostId === post.id
+        ).length;
+        return {
+          ...post,
+          _commentCount: commentCount,
+        };
+      });
+
+      // Fetch threads to get thread titles
+      let threadsMap: Record<string, { title: string; id: string }> = {};
+      try {
+        const threadsResponse = await forumsApi.threads.list({ limit: 50 });
+        threadsMap = threadsResponse.threads.reduce((acc, thread) => {
+          acc[thread.id] = { title: thread.title, id: thread.id };
+          return acc;
+        }, {} as Record<string, { title: string; id: string }>);
+      } catch {
+        // Continue without thread info if fetch fails
+      }
+
+      // Add thread info to posts
+      const postsWithThreadInfo = postsWithCommentCount.map((post) => {
+        const threadInfo = threadsMap[post.threadId];
+        return {
+          ...post,
+          _threadTitle: threadInfo?.title,
+          _threadId: threadInfo?.id || post.threadId,
+        } as ExtendedPost;
+      });
+
+      // Sort by createdAt descending (should already be sorted but just in case)
+      postsWithThreadInfo.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      // Limit to 50 posts for performance
+      const finalPosts = postsWithThreadInfo.slice(0, 50);
+
+      // Update cache
+      postsCache = finalPosts;
+      lastFetchTime = now;
+
+      setPosts(finalPosts);
+    } catch (err) {
+      // Use friendly error message, suppress technical details
+      const errorMessage = err instanceof Error ? err.message : "";
+      // Only show error if it's not a 401 (session expired) - silently fail for auth issues
+      if (errorMessage.includes("session has expired")) {
+        setError(null); // Suppress auth errors, just show empty or cached data
+      } else {
+        setError(
+          errorMessage || "Unable to load feed. Pull down to try again."
+        );
+      }
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+      isFetching = false; // Release lock
+    }
+  }, []);
+
+  // Handle manual refresh (from pull-to-refresh)
+  const handleRefresh = useCallback(async () => {
+    await fetchPosts(true);
+  }, [fetchPosts]);
+
+  // Fetch posts on mount and when refreshKey changes
+  useEffect(() => {
+    // If refreshKey changed, force refresh
+    const shouldForce = lastRefreshKey.current !== refreshKey;
+    lastRefreshKey.current = refreshKey;
+
+    fetchPosts(shouldForce);
+  }, [refreshKey, fetchPosts]);
+
+  // Pull-to-refresh touch handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (containerRef.current?.scrollTop === 0) {
+      touchStartY.current = e.touches[0].clientY;
+      setIsPulling(true);
+    }
+  }, []);
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (!isPulling) return;
+
+      const touchY = e.touches[0].clientY;
+      const diff = touchY - touchStartY.current;
+
+      if (diff > 0 && containerRef.current?.scrollTop === 0) {
+        // Apply resistance effect
+        const resistance = Math.min(diff * 0.5, PULL_THRESHOLD * 1.5);
+        setPullDistance(resistance);
+      }
+    },
+    [isPulling]
+  );
+
+  const handleTouchEnd = useCallback(async () => {
+    if (pullDistance >= PULL_THRESHOLD) {
+      await handleRefresh();
+    }
+    setPullDistance(0);
+    setIsPulling(false);
+  }, [pullDistance, handleRefresh]);
 
   if (isLoading) {
     return (
@@ -126,262 +235,60 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
   }
 
   return (
-    <div className="space-y-4">
-      {posts.map((post) => (
-        <FeedPostCard key={post.id} post={post} />
-      ))}
+    <div
+      ref={containerRef}
+      className="relative"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull-to-refresh indicator */}
+      <div
+        className="absolute left-0 right-0 flex items-center justify-center transition-all duration-200 overflow-hidden"
+        style={{
+          height: pullDistance > 0 ? `${pullDistance}px` : 0,
+          top: `-${pullDistance}px`,
+          opacity: pullDistance / PULL_THRESHOLD,
+        }}
+      >
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <RefreshCw
+            className={`h-5 w-5 ${
+              pullDistance >= PULL_THRESHOLD ? "animate-spin" : ""
+            }`}
+            style={{
+              transform: `rotate(${(pullDistance / PULL_THRESHOLD) * 180}deg)`,
+            }}
+          />
+          <span className="text-sm">
+            {pullDistance >= PULL_THRESHOLD
+              ? "Release to refresh"
+              : "Pull down to refresh"}
+          </span>
+        </div>
+      </div>
+
+      {/* Refreshing indicator */}
+      {isRefreshing && (
+        <div className="flex items-center justify-center py-3 mb-4 bg-muted/50 rounded-lg">
+          <RefreshCw className="h-4 w-4 animate-spin mr-2 text-primary" />
+          <span className="text-sm text-muted-foreground">Refreshing...</span>
+        </div>
+      )}
+
+      {/* Posts list with pull effect */}
+      <div
+        className="space-y-4 transition-transform duration-200"
+        style={{
+          transform:
+            pullDistance > 0 ? `translateY(${pullDistance}px)` : "none",
+        }}
+      >
+        {posts.map((post) => (
+          <FeedPostCard key={post.id} post={post as ExtendedPost} />
+        ))}
+      </div>
     </div>
-  );
-}
-
-interface ExtendedPost extends ForumsPost {
-  _threadTitle?: string;
-  _threadId?: string;
-  _threadViewCount?: number;
-  _threadPostCount?: number;
-}
-
-function FeedPostCard({
-  post,
-  onUpdate,
-}: {
-  post: ExtendedPost;
-  onUpdate?: () => void;
-}) {
-  const { user: currentUser, isAuthenticated } = useAuth();
-  const author = post.author || post.user;
-  const authorId = post.authorId || post.userId || "";
-  const tags = post.extendedData?.tags || [];
-  const images = post.extendedData?.images || [];
-  const threadTitle = post._threadTitle;
-  const threadId = post._threadId;
-  const viewCount = post._threadViewCount || 0;
-
-  // Like state
-  const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
-  const [isLiked, setIsLiked] = useState(
-    post.likes?.some((like) => like.userId === currentUser?.id) || false
-  );
-  const [isLiking, setIsLiking] = useState(false);
-
-  // Comment modal state
-  const [showCommentModal, setShowCommentModal] = useState(false);
-
-  // Handle Like
-  const handleLike = async () => {
-    if (!isAuthenticated || isLiking) return;
-
-    setIsLiking(true);
-    const wasLiked = isLiked;
-
-    // Optimistic update
-    setIsLiked(!wasLiked);
-    setLikeCount((prev) => (wasLiked ? prev - 1 : prev + 1));
-
-    try {
-      if (wasLiked) {
-        await forumsApi.posts.unlike(post.id);
-      } else {
-        await forumsApi.posts.like(post.id);
-      }
-    } catch (error) {
-      // Revert on error
-      setIsLiked(wasLiked);
-      setLikeCount((prev) => (wasLiked ? prev + 1 : prev - 1));
-      console.error("Failed to update like:", error);
-    } finally {
-      setIsLiking(false);
-    }
-  };
-
-  // Detect intent from body
-  const detectIntent = (text: string): "WTS" | "WTB" | "WTT" | null => {
-    const upper = text.toUpperCase();
-    if (upper.includes("#WTS")) return "WTS";
-    if (upper.includes("#WTB")) return "WTB";
-    if (upper.includes("#WTT")) return "WTT";
-    return null;
-  };
-  const intent = detectIntent(post.body);
-
-  // Clean body - keep hashtags visible
-  const displayBody = post.body.replace(/\n\n\[Image \d+\]\s*/g, "").trim();
-
-  return (
-    <Card className="border-border/50 hover:border-border transition-colors">
-      <CardContent className="p-4">
-        {/* Header */}
-        <div className="flex items-start gap-3">
-          <Link href={`/user/${authorId}`}>
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={author?.avatarUrl || undefined} />
-              <AvatarFallback>
-                {author?.displayName?.charAt(0) || "?"}
-              </AvatarFallback>
-            </Avatar>
-          </Link>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Link
-                href={`/user/${authorId}`}
-                className="font-semibold hover:underline"
-              >
-                {author?.displayName || "Anonymous"}
-              </Link>
-              {intent && (
-                <span
-                  className={`px-2 py-0.5 text-xs font-bold rounded-full ${intentStyles[intent]}`}
-                >
-                  {intent}
-                </span>
-              )}
-              <span className="text-muted-foreground">·</span>
-              <span className="text-sm text-muted-foreground">
-                {formatDistanceToNow(new Date(post.createdAt), {
-                  addSuffix: true,
-                })}
-              </span>
-            </div>
-
-            {/* Thread reference */}
-            {threadTitle && threadId && (
-              <Link
-                href={`/thread/${threadId}`}
-                className="text-xs text-muted-foreground hover:text-primary"
-              >
-                in {threadTitle}
-              </Link>
-            )}
-
-            {/* Tags */}
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant="secondary"
-                    className="text-xs px-2 py-0"
-                  >
-                    #{tag}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="mt-3 text-foreground whitespace-pre-wrap">
-          {displayBody}
-        </div>
-
-        {/* Images - Facebook Style */}
-        {images.length > 0 && (
-          <div className="mt-3 space-y-1">
-            {/* Main Image - Full width, maintains aspect ratio */}
-            <div className="relative w-full overflow-hidden rounded-xl border border-border bg-muted/50">
-              <img
-                src={images[0]}
-                alt=""
-                className="w-full max-h-[500px] object-contain"
-              />
-            </div>
-
-            {/* Additional Images - Small thumbnails grid */}
-            {images.length > 1 && (
-              <div className="grid grid-cols-4 gap-1">
-                {images.slice(1, 5).map((img, idx) => (
-                  <div
-                    key={idx + 1}
-                    className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted/50"
-                  >
-                    <img
-                      src={img}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                    {/* Overlay for remaining images count */}
-                    {idx === 3 && images.length > 5 && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-lg font-bold text-white">
-                        +{images.length - 5}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Actions - Facebook Style */}
-        <div className="mt-4 border-t border-border/50 pt-1">
-          {/* Stats row */}
-          <div className="flex items-center justify-between px-2 py-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              {likeCount > 0 && (
-                <span className="flex items-center gap-1">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500">
-                    <Heart className="h-3 w-3 fill-white text-white" />
-                  </span>
-                  {likeCount}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <Eye className="h-3.5 w-3.5" />
-                {viewCount}
-              </span>
-            </div>
-          </div>
-
-          {/* Action buttons row */}
-          <div className="flex border-t border-border/50">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLike}
-              disabled={!isAuthenticated || isLiking}
-              className={cn(
-                "flex-1 gap-2 rounded-none py-3 h-auto font-normal",
-                isLiked
-                  ? "text-primary hover:bg-primary/10"
-                  : "text-muted-foreground hover:bg-muted"
-              )}
-            >
-              <Heart className={cn("h-5 w-5", isLiked ? "fill-current" : "")} />
-              <span>Like</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowCommentModal(true)}
-              className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
-            >
-              <MessageSquare className="h-5 w-5" />
-              <span>Comment</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
-            >
-              <Share className="h-5 w-5" />
-              <span>Share</span>
-            </Button>
-          </div>
-        </div>
-
-        {/* Comment Modal */}
-        <CommentModal
-          post={post}
-          isOpen={showCommentModal}
-          onClose={() => setShowCommentModal(false)}
-          onUpdate={onUpdate}
-        />
-      </CardContent>
-    </Card>
   );
 }
 
