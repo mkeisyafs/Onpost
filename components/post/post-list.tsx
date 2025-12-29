@@ -48,7 +48,11 @@ export function PostList({ threadId }: PostListProps) {
       setRetryCount(0);
       return result;
     } catch (error) {
-      console.error(`[PostList] Fetch failed with config:`, currentConfig, error);
+      console.error(
+        `[PostList] Fetch failed with config:`,
+        currentConfig,
+        error
+      );
       throw error;
     }
   }, [threadId, cursor, currentConfig]);
@@ -85,7 +89,6 @@ export function PostList({ threadId }: PostListProps) {
       // Check if we should retry with same config
       if (retryCount < MAX_RETRIES) {
         const timer = setTimeout(() => {
-          console.log(`[PostList] Retry ${retryCount + 1}/${MAX_RETRIES} with same config`);
           setRetryCount((prev) => prev + 1);
           mutate();
         }, RETRY_DELAY_MS * (retryCount + 1));
@@ -94,12 +97,13 @@ export function PostList({ threadId }: PostListProps) {
 
       // Try next fallback config
       if (configIndex < FETCH_CONFIGS.length - 1) {
-        console.log(`[PostList] Trying fallback config ${configIndex + 1}`);
         setConfigIndex((prev) => prev + 1);
         setRetryCount(0);
       } else {
         // All configs failed - give up
-        console.error(`[PostList] All fallback configs failed for thread ${threadId}`);
+        console.error(
+          `[PostList] All fallback configs failed for thread ${threadId}`
+        );
         setFailedPermanently(true);
       }
     }
@@ -124,13 +128,10 @@ export function PostList({ threadId }: PostListProps) {
         <AlertCircle className="h-10 w-10 mx-auto text-destructive/60 mb-3" />
         <p className="text-foreground font-medium mb-1">Unable to load posts</p>
         <p className="text-sm text-muted-foreground mb-4">
-          This thread may have data issues. Try again later or view a different thread.
+          This thread may have data issues. Try again later or view a different
+          thread.
         </p>
-        <Button
-          variant="outline"
-          className="gap-2"
-          onClick={handleManualRetry}
-        >
+        <Button variant="outline" className="gap-2" onClick={handleManualRetry}>
           <RefreshCw className="h-4 w-4" />
           Try Again
         </Button>
@@ -142,7 +143,9 @@ export function PostList({ threadId }: PostListProps) {
   if (error && hasFailed && !isValidating) {
     return (
       <div className="rounded-lg border border-border bg-card p-8 text-center">
-        <p className="text-muted-foreground mb-2">Having trouble loading posts...</p>
+        <p className="text-muted-foreground mb-2">
+          Having trouble loading posts...
+        </p>
         <p className="text-xs text-muted-foreground mb-4">
           Trying alternative methods ({configIndex + 1}/{FETCH_CONFIGS.length})
         </p>
@@ -194,7 +197,9 @@ export function PostList({ threadId }: PostListProps) {
       {/* Show notice if using fallback config */}
       {configIndex > 0 && (
         <div className="text-xs text-muted-foreground text-center py-2">
-          Showing posts in {currentConfig.filter === "newest" ? "newest first" : "oldest first"} order
+          Showing posts in{" "}
+          {currentConfig.filter === "newest" ? "newest first" : "oldest first"}{" "}
+          order
         </div>
       )}
 

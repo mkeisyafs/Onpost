@@ -8,35 +8,55 @@ interface ThreadTabsProps {
   activeTab: "posts" | "market" | "insights";
   onTabChange: (tab: "posts" | "market" | "insights") => void;
   market?: ThreadMarketData;
+  // Admin settings from thread.extendedData
+  adminMarketEnabled?: boolean;
+  adminInsightsEnabled?: boolean;
+  // Admin settings for hiding tabs
+  marketHidden?: boolean;
+  insightsHidden?: boolean;
 }
 
 export function ThreadTabs({
   activeTab,
   onTabChange,
   market,
+  adminMarketEnabled,
+  adminInsightsEnabled,
+  marketHidden,
+  insightsHidden,
 }: ThreadTabsProps) {
-  const tabs = [
+  // If admin explicitly enabled, override the threshold lock
+  const marketLocked = adminMarketEnabled ? false : market?.analytics?.locked;
+  const insightsLocked = adminInsightsEnabled
+    ? false
+    : market?.analytics?.locked;
+
+  const allTabs = [
     {
       id: "posts" as const,
       label: "Posts",
       icon: MessageSquare,
+      hidden: false, // Posts tab is never hidden
     },
     {
       id: "market" as const,
       label: "Market",
       icon: TrendingUp,
-      locked: market?.analytics?.locked,
-      progress: market?.analytics?.locked
-        ? `${market?.validCount ?? 0}/10`
-        : undefined,
+      locked: marketLocked,
+      progress: marketLocked ? `${market?.validCount ?? 0}/10` : undefined,
+      hidden: marketHidden,
     },
     {
       id: "insights" as const,
       label: "Insights",
       icon: Sparkles,
-      locked: market?.analytics?.locked,
+      locked: insightsLocked,
+      hidden: insightsHidden,
     },
   ];
+
+  // Filter out hidden tabs
+  const tabs = allTabs.filter((tab) => !tab.hidden);
 
   return (
     <div className="mt-6 flex border-b border-border">

@@ -44,7 +44,6 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
 
     // Skip if currently fetching (prevent concurrent requests)
     if (isFetching) {
-      console.log("[HomeFeed] Skipping - fetch already in progress");
       return;
     }
 
@@ -54,7 +53,6 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
       postsCache &&
       now - lastFetchTime < MIN_FETCH_INTERVAL
     ) {
-      console.log("[HomeFeed] Skipping fetch - using cached data");
       setPosts(postsCache);
       setIsLoading(false);
       return;
@@ -90,14 +88,49 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
         (post) => !post.parentId && !post.parentPostId
       );
 
+      // Calculate comment counts for each main post
+      // A comment is any post that has this post as parentId
+      const allPosts = postsResponse.posts;
+      const postsWithCommentCount = mainPosts.map((post) => {
+        const commentCount = allPosts.filter(
+          (p) => p.parentId === post.id || p.parentPostId === post.id
+        ).length;
+        return {
+          ...post,
+          _commentCount: commentCount,
+        };
+      });
+
+      // Fetch threads to get thread titles
+      let threadsMap: Record<string, { title: string; id: string }> = {};
+      try {
+        const threadsResponse = await forumsApi.threads.list({ limit: 50 });
+        threadsMap = threadsResponse.threads.reduce((acc, thread) => {
+          acc[thread.id] = { title: thread.title, id: thread.id };
+          return acc;
+        }, {} as Record<string, { title: string; id: string }>);
+      } catch {
+        // Continue without thread info if fetch fails
+      }
+
+      // Add thread info to posts
+      const postsWithThreadInfo = postsWithCommentCount.map((post) => {
+        const threadInfo = threadsMap[post.threadId];
+        return {
+          ...post,
+          _threadTitle: threadInfo?.title,
+          _threadId: threadInfo?.id || post.threadId,
+        } as ExtendedPost;
+      });
+
       // Sort by createdAt descending (should already be sorted but just in case)
-      mainPosts.sort(
+      postsWithThreadInfo.sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
 
       // Limit to 50 posts for performance
-      const finalPosts = mainPosts.slice(0, 50);
+      const finalPosts = postsWithThreadInfo.slice(0, 50);
 
       // Update cache
       postsCache = finalPosts;
@@ -124,7 +157,6 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
 
   // Handle manual refresh (from pull-to-refresh)
   const handleRefresh = useCallback(async () => {
-    console.log("[HomeFeed] Manual refresh triggered");
     await fetchPosts(true);
   }, [fetchPosts]);
 

@@ -23,18 +23,18 @@
   --primary-foreground: oklch(0.99 0 0);
   --primary-glow: oklch(0.55 0.2 145 / 0.4);
 
-  /* Secondary */
-  --secondary: oklch(0.96 0.01 260);
-  --secondary-foreground: oklch(0.35 0.02 260);
+  /* Secondary - improved for hover visibility */
+  --secondary: oklch(0.92 0.015 260);
+  --secondary-foreground: oklch(0.25 0.02 260);
 
   /* Accent - Purple */
   --accent: oklch(0.6 0.15 280);
   --accent-foreground: oklch(0.99 0 0);
   --accent-glow: oklch(0.6 0.15 280 / 0.3);
 
-  /* Muted */
-  --muted: oklch(0.96 0.005 260);
-  --muted-foreground: oklch(0.5 0.01 260);
+  /* Muted - improved contrast for light mode */
+  --muted: oklch(0.93 0.008 260);
+  --muted-foreground: oklch(0.4 0.015 260);
 
   /* Destructive */
   --destructive: oklch(0.55 0.22 25);

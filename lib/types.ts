@@ -123,6 +123,7 @@ export interface PostExtendedData {
   homeFeed?: boolean; // true if created from Home feed
   tags?: string[]; // Game/category tags
   linkedThreadId?: string; // Auto-linked market thread (for analytics)
+  likedBy?: string[]; // User IDs who liked this post
 }
 
 // Thread Market Data
@@ -159,19 +160,22 @@ export interface AccountMarketSnapshot {
 
 export interface ThreadMarketData {
   marketEnabled: boolean;
+  insightsEnabled?: boolean; // Admin flag to enable insights without threshold
+  marketHidden?: boolean; // Admin flag to completely hide market tab
+  insightsHidden?: boolean; // Admin flag to completely hide insights tab
   marketTypeFinal:
-  | "ITEM_MARKET"
-  | "ACCOUNT_MARKET"
-  | "PHYSICAL_ITEM"
-  | "GENERAL"
-  | null;
+    | "ITEM_MARKET"
+    | "ACCOUNT_MARKET"
+    | "PHYSICAL_ITEM"
+    | "GENERAL"
+    | null;
   // Optional fields - computed server-side
   marketTypeCandidate?:
-  | "ITEM_MARKET"
-  | "ACCOUNT_MARKET"
-  | "PHYSICAL_ITEM"
-  | "GENERAL"
-  | "UNKNOWN";
+    | "ITEM_MARKET"
+    | "ACCOUNT_MARKET"
+    | "PHYSICAL_ITEM"
+    | "GENERAL"
+    | "UNKNOWN";
   windowDays?: number;
   thresholdValid?: number;
   validCount?: number;

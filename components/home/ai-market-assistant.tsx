@@ -134,10 +134,19 @@ export function AIMarketAssistant() {
     setIsLoading(true);
 
     try {
+      // Build conversation history for context
+      const conversationHistory = messages.slice(-6).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
       const response = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({
+          query,
+          conversationHistory,
+        }),
       });
 
       const data: AssistantResponse = await response.json();
@@ -146,7 +155,7 @@ export function AIMarketAssistant() {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.summary || data.message || "Here's what I found:",
+        content: data.message || data.summary || "Here's what I found:",
         response: data,
         timestamp: new Date().toISOString(),
       };
@@ -437,6 +446,39 @@ function MessageBubble({
     return (
       <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-3 py-2">
         {response.message}
+      </div>
+    );
+  }
+
+  // CHAT_RESPONSE - show message first, then any listings
+  if (response?.type === "CHAT_RESPONSE") {
+    return (
+      <div className="space-y-2">
+        {/* AI Message */}
+        <div className="bg-muted text-sm rounded-lg px-3 py-2 whitespace-pre-wrap">
+          {message.content}
+        </div>
+
+        {/* Listings if available */}
+        {response?.listings && response.listings.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Related listings:</p>
+            {response.listings.slice(0, 5).map((listing) => (
+              <ListingCard
+                key={listing.postId}
+                listing={listing}
+                onClick={() => onListingClick(listing)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Metadata */}
+        {response?.matched !== undefined && response.matched > 0 && (
+          <p className="text-xs text-muted-foreground pl-2">
+            📊 Found {response.matched} relevant posts
+          </p>
+        )}
       </div>
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
@@ -43,7 +43,6 @@ import {
   Trash,
   Heart,
   Repeat2,
-  Share,
   X,
   Loader2,
   ImageIcon,
@@ -78,7 +77,35 @@ export function PostCard({
   const [post, setPost] = useState(initialPost);
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
-  
+
+  // Comment count state - starts with replies length, fetches actual count on mount
+  const [commentCount, setCommentCount] = useState(replies.length);
+
+  // Auto-fetch comment count on mount
+  useEffect(() => {
+    const fetchCommentCount = async () => {
+      try {
+        const response = await forumsApi.posts.list(initialPost.threadId, {
+          filter: "oldest",
+          limit: 100,
+        });
+        // Count posts that have this post as parent
+        const count = response.posts.filter(
+          (p) =>
+            p.parentId === initialPost.id || p.parentPostId === initialPost.id
+        ).length;
+        setCommentCount(count);
+      } catch (err) {
+        // Silently fail, keep current count
+      }
+    };
+
+    // Only fetch if replies weren't provided (count is 0)
+    if (replies.length === 0) {
+      fetchCommentCount();
+    }
+  }, [initialPost.id, initialPost.threadId, replies.length]);
+
   // Crop state
   const [croppingImage, setCroppingImage] = useState<string | null>(null);
 
@@ -92,7 +119,9 @@ export function PostCard({
   const [isEditing, setIsEditing] = useState(false);
   const [isUploadingEdit, setIsUploadingEdit] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [editIntent, setEditIntent] = useState<"WTS" | "WTB" | "WTT" | null>(null);
+  const [editIntent, setEditIntent] = useState<"WTS" | "WTB" | "WTT" | null>(
+    null
+  );
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
   const postAuthorId = post.authorId || post.userId || "";
@@ -102,6 +131,12 @@ export function PostCard({
   const [isLiked, setIsLiked] = useState(
     post.likes?.some((like) => like.userId === currentUser?.id) || false
   );
+
+  // Callback when comments are updated
+  const handleCommentUpdate = () => {
+    setCommentCount((prev) => prev + 1);
+    onUpdate?.();
+  };
 
   // Handle Edit Image Selection
   const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -144,7 +179,10 @@ export function PostCard({
               const result = await uploadImage(compressed);
               uploadedImageUrls.push(result.url);
             } else if (img.url.startsWith("data:")) {
-              const result = await uploadBase64Image(img.url, "edited-image.jpg");
+              const result = await uploadBase64Image(
+                img.url,
+                "edited-image.jpg"
+              );
               uploadedImageUrls.push(result.url);
             }
           } catch (uploadErr) {
@@ -169,7 +207,7 @@ export function PostCard({
           images: allImageUrls.length > 0 ? allImageUrls : undefined,
         },
       });
-      
+
       setPost(updatedPost);
       setShowEditDialog(false);
       onUpdate?.();
@@ -197,12 +235,14 @@ export function PostCard({
   const openEditDialog = () => {
     // Clean up [Image X] tags from legacy posts
     let cleanBody = post.body.replace(/\n\n\[Image \d+\]\s*/g, "").trim();
-    
+
     // Detect and strip intent tag
     const currentIntent = detectIntent(cleanBody);
     if (currentIntent) {
       setEditIntent(currentIntent);
-      cleanBody = cleanBody.replace(new RegExp(`#${currentIntent}`, "gi"), "").trim();
+      cleanBody = cleanBody
+        .replace(new RegExp(`#${currentIntent}`, "gi"), "")
+        .trim();
     } else {
       setEditIntent(null);
     }
@@ -423,7 +463,6 @@ export function PostCard({
               {/* Image Grid - Facebook Style */}
               {images.length > 0 && (
                 <div className="mt-3 space-y-1">
-
                   {/* Main Image - Flexible Aspect Ratio */}
                   <button
                     type="button"
@@ -505,7 +544,7 @@ export function PostCard({
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1">
                       <MessageSquare className="h-3.5 w-3.5" />
-                      {replies.length}
+                      {commentCount}
                     </span>
                   </div>
                 </div>
@@ -521,7 +560,7 @@ export function PostCard({
                       "flex-1 gap-2 rounded-none py-3 h-auto font-normal",
                       isLiked
                         ? "text-primary hover:bg-primary/10"
-                        : "text-muted-foreground hover:bg-muted"
+                        : "text-foreground/70 hover:bg-secondary hover:text-foreground"
                     )}
                   >
                     <Heart
@@ -533,18 +572,10 @@ export function PostCard({
                     variant="ghost"
                     size="sm"
                     onClick={() => setShowCommentModal(true)}
-                    className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
+                    className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-foreground/70 hover:bg-secondary hover:text-foreground"
                   >
                     <MessageSquare className="h-5 w-5" />
                     <span>Comment</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1 gap-2 rounded-none py-3 h-auto font-normal text-muted-foreground hover:bg-muted"
-                  >
-                    <Share className="h-5 w-5" />
-                    <span>Share</span>
                   </Button>
                 </div>
               </div>
@@ -592,7 +623,8 @@ export function PostCard({
         post={post}
         isOpen={showCommentModal}
         onClose={() => setShowCommentModal(false)}
-        onUpdate={onUpdate}
+        onUpdate={handleCommentUpdate}
+        onCommentsLoaded={(count) => setCommentCount(count)}
       />
 
       {/* Edit Post Dialog */}
@@ -628,7 +660,9 @@ export function PostCard({
               <Badge
                 variant={editIntent === "WTB" ? "default" : "outline"}
                 className={`cursor-pointer ${
-                  editIntent === "WTB" ? "bg-yellow-500 hover:bg-yellow-600 text-black hover:text-black" : ""
+                  editIntent === "WTB"
+                    ? "bg-yellow-500 hover:bg-yellow-600 text-black hover:text-black"
+                    : ""
                 }`}
                 onClick={() =>
                   setEditIntent((prev) => (prev === "WTB" ? null : "WTB"))
@@ -639,7 +673,9 @@ export function PostCard({
               <Badge
                 variant={editIntent === "WTT" ? "default" : "outline"}
                 className={`cursor-pointer ${
-                  editIntent === "WTT" ? "bg-orange-500 hover:bg-orange-600" : ""
+                  editIntent === "WTT"
+                    ? "bg-orange-500 hover:bg-orange-600"
+                    : ""
                 }`}
                 onClick={() =>
                   setEditIntent((prev) => (prev === "WTT" ? null : "WTT"))

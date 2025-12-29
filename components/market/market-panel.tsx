@@ -22,6 +22,8 @@ import type {
 
 interface MarketPanelProps {
   market: ThreadMarketData;
+  // Admin override - if true, show market even if threshold not met
+  adminEnabled?: boolean;
 }
 
 function isItemMarketSnapshot(
@@ -36,21 +38,26 @@ function isAccountMarketSnapshot(
   return snapshot !== null && "bands" in snapshot;
 }
 
-export function MarketPanel({ market }: MarketPanelProps) {
+export function MarketPanel({ market, adminEnabled }: MarketPanelProps) {
   const {
     analytics,
-    validCount,
-    thresholdValid,
+    validCount = 0,
+    thresholdValid = 10,
     marketTypeFinal,
     marketTypeCandidate,
   } = market;
-  const { locked, snapshot, updatedAt } = analytics;
+  const locked = analytics?.locked ?? true;
+  const snapshot = analytics?.snapshot ?? null;
+  const updatedAt = analytics?.updatedAt;
 
   const marketType = marketTypeFinal || marketTypeCandidate;
   const progress = (validCount / thresholdValid) * 100;
 
-  // Locked state - not enough data
-  if (locked || !snapshot) {
+  // If admin enabled, bypass the threshold lock
+  const isLocked = adminEnabled ? false : locked;
+
+  // Show locked state only if actually locked (not admin enabled)
+  if (isLocked) {
     return (
       <Card>
         <CardHeader>
@@ -85,6 +92,45 @@ export function MarketPanel({ market }: MarketPanelProps) {
     );
   }
 
+  // Admin unlocked but no snapshot data yet - show no data state
+  if (!snapshot) {
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            <CardTitle>Market Analytics</CardTitle>
+          </div>
+          <CardDescription>
+            {adminEnabled
+              ? "Analytics enabled by admin"
+              : "Market analytics available"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-muted/50 p-6 text-center">
+              <div className="mb-3 text-3xl">📊</div>
+              <p className="font-medium text-foreground">
+                No Analytics Data Yet
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {validCount === 0
+                  ? "Post some trade offers (WTS/WTB/WTT) to start collecting market data."
+                  : `${validCount} trade post${
+                      validCount > 1 ? "s" : ""
+                    } collected. Analytics will be generated when there's enough data.`}
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              Tip: Include prices in your posts for accurate analytics
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Item Market, Physical Item Market, or General Market
   if (
     (marketType === "ITEM_MARKET" ||
@@ -98,20 +144,20 @@ export function MarketPanel({ market }: MarketPanelProps) {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MarketSummary
             title="Sell Median"
-            value={formatPrice(snapshot.sell.median, "IDR")}
+            value={formatPrice(snapshot.sell.median, "USD")}
             description={`${snapshot.sell.count} listings`}
             icon={TrendingUp}
             trend={snapshot.trend}
           />
           <MarketSummary
             title="Buy Median"
-            value={formatPrice(snapshot.buy.median, "IDR")}
+            value={formatPrice(snapshot.buy.median, "USD")}
             description={`${snapshot.buy.count} listings`}
             icon={TrendingUp}
           />
           <MarketSummary
             title="Spread"
-            value={formatPrice(snapshot.spread, "IDR")}
+            value={formatPrice(snapshot.spread, "USD")}
             description="Sell - Buy"
             icon={ArrowUpDown}
           />

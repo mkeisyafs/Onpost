@@ -82,7 +82,7 @@ export function ThreadCard({ thread }: ThreadCardProps) {
   // Fetch posts to get actual count (with error resilience)
   const { data: postsData } = useSWR(
     ["thread-posts-count", thread.id],
-    () => forumsApi.posts.list(thread.id, { limit: 1 }),
+    () => forumsApi.posts.list(thread.id, { limit: 100 }),
     {
       revalidateOnFocus: false,
       // Don't spam retries on 500 errors
@@ -93,7 +93,8 @@ export function ThreadCard({ thread }: ThreadCardProps) {
 
   // Use real data from thread or fetched data
   const viewCount = thread.viewCount || 0;
-  const postCount = thread.postCount ?? 0;
+  // Use fetched posts length if available, otherwise fallback to thread.postCount
+  const postCount = postsData?.posts?.length ?? thread.postCount ?? 0;
 
   return (
     <Link

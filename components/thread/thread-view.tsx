@@ -144,18 +144,30 @@ export function ThreadView({ threadId }: ThreadViewProps) {
   const hasMarket = market?.marketEnabled;
   const isLocked = thread.isLocked || thread.locked;
 
+  // Admin settings for features (enable = bypass threshold lock)
+  const adminMarketEnabled = market?.marketEnabled ?? false;
+  const adminInsightsEnabled = market?.insightsEnabled ?? false;
+
+  // Admin settings for hiding tabs completely
+  const marketHidden = market?.marketHidden ?? false;
+  const insightsHidden = market?.insightsHidden ?? false;
+
   return (
     <>
       <div className="mx-auto max-w-4xl px-4 py-6">
         {/* Thread Header */}
         <ThreadHeader thread={thread} postCount={actualPostCount} />
 
-        {/* Market Tabs */}
-        {hasMarket && (
+        {/* Market Tabs - only show if market is enabled AND not ALL tabs are hidden */}
+        {hasMarket && !(marketHidden && insightsHidden) && (
           <ThreadTabs
             activeTab={activeTab}
             onTabChange={setActiveTab}
             market={market}
+            adminMarketEnabled={adminMarketEnabled}
+            adminInsightsEnabled={adminInsightsEnabled}
+            marketHidden={marketHidden}
+            insightsHidden={insightsHidden}
           />
         )}
 
@@ -198,11 +210,14 @@ export function ThreadView({ threadId }: ThreadViewProps) {
             </div>
           )}
 
-          {activeTab === "market" && hasMarket && (
-            <MarketPanel market={market} />
+          {activeTab === "market" && hasMarket && !marketHidden && (
+            <MarketPanel market={market} adminEnabled={adminMarketEnabled} />
           )}
-          {activeTab === "insights" && hasMarket && (
-            <InsightsPanel market={market} />
+          {activeTab === "insights" && hasMarket && !insightsHidden && (
+            <InsightsPanel
+              market={market}
+              adminEnabled={adminInsightsEnabled}
+            />
           )}
         </div>
       </div>

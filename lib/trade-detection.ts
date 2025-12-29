@@ -195,25 +195,33 @@ export function needsReparse(trade: PostTradeData): boolean {
   return trade.parseConfidence < 0.7 || trade.normalizedPrice === null;
 }
 
+// Exchange rate for IDR to USD (approximate)
+const IDR_TO_USD_RATE = 15800;
+
 export function formatPrice(price: number | null, currency: string): string {
   if (price === null) return "Negotiable";
 
+  // Convert to USD
+  let usdPrice = price;
+
+  // If labeled as IDR, convert to USD
   if (currency === "IDR") {
-    if (price >= 1_000_000) {
-      return `${(price / 1_000_000).toFixed(1).replace(/\.0$/, "")}jt`;
-    }
-    if (price >= 1_000) {
-      return `${(price / 1_000).toFixed(0)}rb`;
-    }
-    return `Rp${price.toLocaleString("id-ID")}`;
+    usdPrice = price / IDR_TO_USD_RATE;
+  }
+  // If labeled as USD but price is suspiciously high (likely stored as IDR),
+  // also convert. This handles legacy data where normalizedPrice was in IDR
+  // but currency was labeled "USD"
+  else if (currency === "USD" && price > 10000) {
+    usdPrice = price / IDR_TO_USD_RATE;
   }
 
-  if (currency === "USD") {
-    return `$${price.toLocaleString("en-US", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    })}`;
+  // Format as USD
+  if (usdPrice >= 1000) {
+    return `$${(usdPrice / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   }
 
-  return `${price} ${currency}`;
+  return `$${usdPrice.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: usdPrice < 10 ? 2 : 0,
+  })}`;
 }

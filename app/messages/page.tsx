@@ -71,14 +71,10 @@ export default function MessagesPage() {
   } = useSWR(
     isAuthenticated && user?.id ? ["all-messages", user.id] : null,
     async () => {
-      console.log("Fetching all messages...");
       const [inbox, sent] = await Promise.all([
         forumsApi.messages.list({ folder: "inbox", limit: 100 }),
         forumsApi.messages.list({ folder: "sent", limit: 100 }),
       ]);
-
-      console.log("Inbox response:", inbox);
-      console.log("Sent response:", sent);
 
       // Combine all messages
       const combinedMessages = [
@@ -95,10 +91,6 @@ export default function MessagesPage() {
       }
       const allMessages = Array.from(messageMap.values());
 
-      console.log("Total messages after dedup:", allMessages.length);
-      console.log("All messages:", allMessages);
-      console.log("Current user ID:", user?.id);
-
       // Group by conversation partner
       const conversationMap = new Map<string, Conversation>();
 
@@ -110,7 +102,6 @@ export default function MessagesPage() {
 
         // Skip if we can't determine the other user ID
         if (!otherUserId) {
-          console.log("Skipping message - no otherUserId:", msg.id);
           continue;
         }
 
@@ -184,10 +175,6 @@ export default function MessagesPage() {
       );
 
       if (usersToFetch.length > 0) {
-        console.log(
-          "Fetching user data for:",
-          usersToFetch.map((c) => c.user.id)
-        );
         try {
           const userPromises = usersToFetch.map((conv) =>
             forumsApi.users.get(conv.user.id).catch(() => null)
@@ -207,7 +194,6 @@ export default function MessagesPage() {
         }
       }
 
-      console.log("Conversations:", conversations.length);
       return conversations;
     },
     {
@@ -242,6 +228,39 @@ export default function MessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages.length]);
 
+  // Handle contact_user from sessionStorage (from Contact Seller button)
+  useEffect(() => {
+    const storedContact = sessionStorage.getItem("contact_user");
+    if (storedContact && isAuthenticated) {
+      try {
+        const contactUser = JSON.parse(storedContact);
+        if (contactUser.id) {
+          // Clear the stored contact
+          sessionStorage.removeItem("contact_user");
+
+          // Use handleSelectNewUser logic
+          const existingConv = allData?.find((c) => c.id === contactUser.id);
+
+          if (existingConv) {
+            setSelectedUserId(contactUser.id);
+            setPendingNewUser(null);
+          } else {
+            setPendingNewUser({
+              id: contactUser.id,
+              username: contactUser.displayName || "User",
+              displayName: contactUser.displayName,
+              avatarUrl: contactUser.avatarUrl || null,
+            });
+            setSelectedUserId(contactUser.id);
+          }
+        }
+      } catch {
+        // Invalid stored data, ignore
+        sessionStorage.removeItem("contact_user");
+      }
+    }
+  }, [isAuthenticated, allData]);
+
   // Send message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,8 +270,6 @@ export default function MessagesPage() {
       !user?.id
     )
       return;
-
-
 
     // Build message body with image if present
     let finalBody = messageBody.trim();
@@ -299,8 +316,6 @@ export default function MessagesPage() {
         recipientId: selectedConversation.user.id,
         extendedData: imageUrl ? { imageUrl: imageUrl } : undefined,
       });
-
-      console.log("Message sent successfully");
 
       // Refresh data after 2 seconds
       setTimeout(() => {

@@ -160,7 +160,8 @@ export type AssistantIntent =
   | "PRICE_ANALYSIS"
   | "DEMAND_INSIGHT"
   | "LIST_RECENT"
-  | "CLARIFICATION";
+  | "CLARIFICATION"
+  | "CHAT_RESPONSE";
 
 export interface ParsedQuery {
   intent: AssistantIntent;
@@ -198,7 +199,9 @@ export interface AssistantListing {
   price: number | null;
   displayPrice: string | null;
   currency: string;
+  title: string;
   description: string;
+  intent: "WTS" | "WTB" | "WTT" | null;
   seller: {
     id: string;
     displayName: string;
@@ -612,14 +615,31 @@ export function postToListing(post: ForumsPost): AssistantListing {
     (postAny["userName"] as string) ||
     "View Seller";
 
+  // Extract intent from body or trade data
+  let postIntent: "WTS" | "WTB" | "WTT" | null = trade?.intent || null;
+  if (!postIntent) {
+    const bodyUpper = post.body.toUpperCase();
+    if (bodyUpper.includes("#WTS") || bodyUpper.includes("WTS"))
+      postIntent = "WTS";
+    else if (bodyUpper.includes("#WTB") || bodyUpper.includes("WTB"))
+      postIntent = "WTB";
+    else if (bodyUpper.includes("#WTT") || bodyUpper.includes("WTT"))
+      postIntent = "WTT";
+  }
+
+  // Generate title from first line of body
+  const title = post.body.split("\n")[0].slice(0, 80) || "Trade Listing";
+
   return {
     postId: post.id,
     threadId: post.threadId,
     price: price,
     displayPrice: displayPrice,
-    currency: trade?.currency || "IDR",
+    currency: trade?.currency || "USD",
+    title: title,
     description:
       post.body.slice(0, 150) + (post.body.length > 150 ? "..." : ""),
+    intent: postIntent,
     seller: {
       id: post.authorId || post.userId || "",
       displayName: sellerName,
@@ -632,17 +652,31 @@ export function postToListing(post: ForumsPost): AssistantListing {
 // ============================================
 // Format Price for Display
 // ============================================
+// Exchange rate for IDR to USD (approximate)
+const IDR_TO_USD_RATE = 15800;
 
-export function formatPrice(price: number, currency: string = "IDR"): string {
-  if (currency === "USD") {
-    return `$${price.toLocaleString()}`;
+export function formatPrice(price: number, currency: string = "USD"): string {
+  // Convert to USD
+  let usdPrice = price;
+
+  // If labeled as IDR, convert to USD
+  if (currency === "IDR") {
+    usdPrice = price / IDR_TO_USD_RATE;
   }
-  // IDR formatting
-  if (price >= 1000000) {
-    return `${(price / 1000000).toFixed(1)}jt`;
+  // If labeled as USD but price is suspiciously high (likely stored as IDR),
+  // also convert. This handles legacy data where normalizedPrice was in IDR
+  // but currency was labeled "USD"
+  else if (currency === "USD" && price > 10000) {
+    usdPrice = price / IDR_TO_USD_RATE;
   }
-  if (price >= 1000) {
-    return `${Math.round(price / 1000)}rb`;
+
+  // Format as USD
+  if (usdPrice >= 1000) {
+    return `$${(usdPrice / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   }
-  return price.toLocaleString();
+
+  return `$${usdPrice.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: usdPrice < 10 ? 2 : 0,
+  })}`;
 }

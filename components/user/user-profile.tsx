@@ -49,6 +49,57 @@ export function UserProfile({ userId }: UserProfileProps) {
     revalidateOnFocus: false,
   });
 
+  // Fetch user's posts
+  useEffect(() => {
+    const fetchUserPosts = async () => {
+      setIsLoadingPosts(true);
+      try {
+        // Fetch threads to get user's posts
+        const threadsRes = await forumsApi.threads.list({ limit: 50 });
+        const allPosts: ExtendedPost[] = [];
+
+        // For each thread, get posts by this user
+        for (const thread of threadsRes.threads.slice(0, 20)) {
+          try {
+            const postsRes = await forumsApi.posts.list(thread.id, {
+              limit: 50,
+            });
+            const userPostsInThread = postsRes.posts.filter(
+              (p) => p.authorId === userId || p.userId === userId
+            );
+
+            // Add thread info to each post
+            userPostsInThread.forEach((post) => {
+              allPosts.push({
+                ...post,
+                _threadTitle: thread.title,
+                _threadId: thread.id,
+              });
+            });
+          } catch (err) {
+            // Skip failed threads
+          }
+        }
+
+        // Sort by date
+        allPosts.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+
+        setUserPosts(allPosts);
+      } catch (err) {
+        console.error("Failed to fetch user posts:", err);
+      } finally {
+        setIsLoadingPosts(false);
+      }
+    };
+
+    if (userId) {
+      fetchUserPosts();
+    }
+  }, [userId]);
+
   if (isLoading) {
     return <UserProfileSkeleton />;
   }

@@ -57,7 +57,6 @@ export default function HomePage() {
       statsCache &&
       now - statsLastFetchTime < STATS_MIN_FETCH_INTERVAL
     ) {
-      console.log("[HomePage] Skipping stats fetch - using cached data");
       setStats(statsCache);
       setIsLoading(false);
       return;
@@ -164,13 +163,6 @@ export default function HomePage() {
               >
                 <TrendingUp className="h-3.5 w-3.5" />
                 {stats.activeToday} active markets
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 border-blue-500/20"
-              >
-                <Clock className="h-3.5 w-3.5" />
-                {stats.newPosts} total posts
               </Badge>
               {stats.negotiations > 0 && (
                 <Badge

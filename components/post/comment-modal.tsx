@@ -15,7 +15,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Heart,
   MessageSquare,
-  Share,
   Send,
   ImageIcon,
   Smile,
@@ -34,6 +33,8 @@ interface CommentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate?: () => void;
+  onCommentsLoaded?: (count: number) => void;
+  onLikeUpdate?: (isLiked: boolean, likeCount: number) => void;
 }
 
 interface Comment {
@@ -57,6 +58,8 @@ export function CommentModal({
   isOpen,
   onClose,
   onUpdate,
+  onCommentsLoaded,
+  onLikeUpdate,
 }: CommentModalProps) {
   const { user, isAuthenticated } = useAuth();
   const { openAuthModal } = useAuthModal();
@@ -78,13 +81,59 @@ export function CommentModal({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const replyImageInputRef = useRef<HTMLInputElement>(null);
 
+  // Like state for the post
+  const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
+  const [isLiked, setIsLiked] = useState(
+    post.likes?.some((like) => like.userId === user?.id) || false
+  );
+  const [isLiking, setIsLiking] = useState(false);
+
   const postAuthor = post.author || post.user;
   const postAuthorId = post.authorId || post.userId || "";
+
+  // Handle Like for the post
+  const handleLikePost = async () => {
+    if (!isAuthenticated || isLiking) {
+      if (!isAuthenticated) {
+        openAuthModal("signin");
+      }
+      return;
+    }
+
+    setIsLiking(true);
+    const wasLiked = isLiked;
+
+    // Optimistic update
+    const newIsLiked = !wasLiked;
+    const newLikeCount = wasLiked ? likeCount - 1 : likeCount + 1;
+    setIsLiked(newIsLiked);
+    setLikeCount(newLikeCount);
+
+    try {
+      if (wasLiked) {
+        await forumsApi.posts.unlike(post.id);
+      } else {
+        await forumsApi.posts.like(post.id);
+      }
+      // Call like update callback to sync with parent
+      onLikeUpdate?.(newIsLiked, newLikeCount);
+    } catch (error) {
+      // Revert on error
+      setIsLiked(wasLiked);
+      setLikeCount(likeCount);
+      console.error("Failed to update like:", error);
+    } finally {
+      setIsLiking(false);
+    }
+  };
 
   // Fetch comments (child posts)
   useEffect(() => {
     if (isOpen) {
       fetchComments();
+      // Reset like state when modal opens with fresh post data
+      setLikeCount(post.likes?.length || 0);
+      setIsLiked(post.likes?.some((like) => like.userId === user?.id) || false);
     }
   }, [isOpen, post.id]);
 
@@ -114,6 +163,9 @@ export function CommentModal({
 
       setComments(topLevelComments as Comment[]);
       setReplies(repliesMap);
+
+      // Notify parent of actual comment count
+      onCommentsLoaded?.(topLevelComments.length);
     } catch (err) {
       console.error("Failed to fetch comments:", err);
     } finally {
@@ -296,7 +348,6 @@ export function CommentModal({
                 addSuffix: true,
               })}
             </span>
-            <button className="hover:underline font-medium">Like</button>
             {!isReply && (
               <button
                 className="hover:underline font-medium"
@@ -459,8 +510,13 @@ export function CommentModal({
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-border text-sm text-muted-foreground">
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1">
-                  <Heart className="h-4 w-4" />
-                  {post.likes?.length || 0} likes
+                  {likeCount > 0 && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500">
+                      <Heart className="h-3 w-3 fill-white text-white" />
+                    </span>
+                  )}
+                  {likeCount > 0 ? likeCount : <Heart className="h-4 w-4" />}{" "}
+                  {likeCount === 0 && "0"} likes
                 </span>
                 <span>{comments.length} comments</span>
               </div>
@@ -468,9 +524,14 @@ export function CommentModal({
 
             {/* Action Buttons */}
             <div className="flex items-center justify-around mt-3 pt-3 border-t border-border">
-              <Button variant="ghost" className="flex-1 gap-2">
-                <Heart className="h-5 w-5" />
-                Like
+              <Button
+                variant="ghost"
+                className={`flex-1 gap-2 ${isLiked ? "text-red-500" : ""}`}
+                onClick={handleLikePost}
+                disabled={isLiking}
+              >
+                <Heart className={`h-5 w-5 ${isLiked ? "fill-current" : ""}`} />
+                {isLiked ? "Liked" : "Like"}
               </Button>
               <Button
                 variant="ghost"
@@ -479,10 +540,6 @@ export function CommentModal({
               >
                 <MessageSquare className="h-5 w-5" />
                 Comment
-              </Button>
-              <Button variant="ghost" className="flex-1 gap-2">
-                <Share className="h-5 w-5" />
-                Share
               </Button>
             </div>
           </div>
