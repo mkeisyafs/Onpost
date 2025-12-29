@@ -67,6 +67,19 @@ async function proxyRequest(request: NextRequest, params: { path: string[] }) {
     // Get response data
     const data = await response.text()
 
+    // Log errors for debugging
+    if (!response.ok) {
+      console.error("[API Proxy] Error:", {
+        method: request.method,
+        url: url.toString(),
+        status: response.status,
+        statusText: response.statusText,
+        requestBody: options.body ? String(options.body).substring(0, 200) : null,
+        response: data.substring(0, 500), // First 500 chars of response
+        hasAuthHeader: !!authHeader,
+      })
+    }
+
     // Return proxied response
     return new NextResponse(data, {
       status: response.status,

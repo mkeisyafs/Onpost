@@ -180,9 +180,9 @@ function FeedPostCard({
 
     try {
       if (wasLiked) {
-        await forumsApi.posts.unlike(post.id);
+        await forumsApi.posts.unlike(post.id, currentUser?.id);
       } else {
-        await forumsApi.posts.like(post.id);
+        await forumsApi.posts.like(post.id, currentUser?.id);
       }
     } catch (error) {
       // Revert on error

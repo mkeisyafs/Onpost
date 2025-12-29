@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ImageCropper } from "@/components/ui/image-cropper";
 import { TradeBadge } from "./trade-badge";
 import {
   hasHighLikelihoodTradePattern,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/trade-detection";
 import forumsApi from "@/lib/forums-api";
 import { useAuth } from "@/lib/auth-context";
-import { ImageIcon, X, Smile, MapPin, Send, Loader2 } from "lucide-react";
+import { ImageIcon, X, Smile, MapPin, Send, Loader2, Crop } from "lucide-react";
 
 interface CreatePostFormProps {
   threadId: string;
@@ -38,6 +39,12 @@ export function CreatePostForm({
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Cropping state
+  const [cropImage, setCropImage] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [currentCropIndex, setCurrentCropIndex] = useState(0);
+
   // Detect trade pattern as user types
   useEffect(() => {
     if (body.trim() && hasHighLikelihoodTradePattern(body)) {
@@ -48,20 +55,119 @@ export function CreatePostForm({
     }
   }, [body]);
 
+  const MAX_IMAGES = 4; // Reduced to prevent API issues
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
-      if (file.type.startsWith("image/")) {
-        const url = URL.createObjectURL(file);
-        setImages((prev) => [...prev, { url, file }]);
-      }
-    });
+    const imageFiles = Array.from(files).filter((file) =>
+      file.type.startsWith("image/")
+    );
+
+    if (imageFiles.length === 0) return;
+
+    // Check if adding these would exceed limit
+    const remainingSlots = MAX_IMAGES - images.length;
+    if (remainingSlots <= 0) {
+      setError(`Maximum ${MAX_IMAGES} images allowed per post`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    // Limit the images to remaining slots
+    const filesToProcess = imageFiles.slice(0, remainingSlots);
+
+    // Queue images for cropping
+    setPendingImages(filesToProcess);
+    setCurrentCropIndex(0);
+    
+    // Load first image for cropping
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImage(reader.result as string);
+      setShowCropper(true);
+    };
+    reader.readAsDataURL(filesToProcess[0]);
 
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  };
+
+  const handleCropComplete = (croppedImageUrl: string) => {
+    // Add cropped image to list
+    setImages((prev) => [...prev, { url: croppedImageUrl }]);
+
+    // Check if there are more images to crop
+    const nextIndex = currentCropIndex + 1;
+    if (nextIndex < pendingImages.length) {
+      setCurrentCropIndex(nextIndex);
+      try {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setCropImage(reader.result as string);
+        };
+        reader.onerror = () => {
+          console.error("Failed to read image file");
+          // Skip to next or finish
+          if (nextIndex + 1 < pendingImages.length) {
+            setCurrentCropIndex(nextIndex + 1);
+          } else {
+            setShowCropper(false);
+            setCropImage(null);
+            setPendingImages([]);
+            setCurrentCropIndex(0);
+          }
+        };
+        reader.readAsDataURL(pendingImages[nextIndex]);
+      } catch (err) {
+        console.error("Error reading next image:", err);
+        setShowCropper(false);
+        setCropImage(null);
+        setPendingImages([]);
+        setCurrentCropIndex(0);
+      }
+    } else {
+      // All images processed
+      setShowCropper(false);
+      setCropImage(null);
+      setPendingImages([]);
+      setCurrentCropIndex(0);
+    }
+  };
+
+  const handleCropCancel = () => {
+    // Skip current image and move to next
+    const nextIndex = currentCropIndex + 1;
+    if (nextIndex < pendingImages.length) {
+      setCurrentCropIndex(nextIndex);
+      try {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setCropImage(reader.result as string);
+        };
+        reader.onerror = () => {
+          console.error("Failed to read image file");
+          setShowCropper(false);
+          setCropImage(null);
+          setPendingImages([]);
+          setCurrentCropIndex(0);
+        };
+        reader.readAsDataURL(pendingImages[nextIndex]);
+      } catch (err) {
+        console.error("Error reading next image:", err);
+        setShowCropper(false);
+        setCropImage(null);
+        setPendingImages([]);
+        setCurrentCropIndex(0);
+      }
+    } else {
+      setShowCropper(false);
+      setCropImage(null);
+      setPendingImages([]);
+      setCurrentCropIndex(0);
     }
   };
 
@@ -94,9 +200,9 @@ export function CreatePostForm({
           const ctx = canvas.getContext("2d");
 
           img.onload = () => {
-            // Max dimensions for compression
-            const MAX_WIDTH = 1024;
-            const MAX_HEIGHT = 1024;
+            // Max dimensions for compression - very small to prevent API issues
+            const MAX_WIDTH = 400;
+            const MAX_HEIGHT = 400;
             let { width, height } = img;
 
             // Calculate new dimensions while maintaining aspect ratio
@@ -110,8 +216,8 @@ export function CreatePostForm({
             canvas.height = height;
             ctx?.drawImage(img, 0, 0, width, height);
 
-            // Compress to JPEG with 0.7 quality (good balance of size/quality)
-            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+            // Compress to JPEG with 0.4 quality (aggressive compression)
+            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.4);
             resolve(compressedBase64);
           };
 
@@ -120,13 +226,56 @@ export function CreatePostForm({
         });
       };
 
+      // Recompress base64 image to ensure smaller size
+      const recompressBase64 = async (base64: string): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const img = document.createElement("img");
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          img.onload = () => {
+            const MAX_SIZE = 400; // Very small to prevent API issues
+            let { width, height } = img;
+
+            if (width > MAX_SIZE || height > MAX_SIZE) {
+              const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx?.drawImage(img, 0, 0, width, height);
+
+            // Use 0.4 quality for aggressive compression
+            const compressed = canvas.toDataURL("image/jpeg", 0.4);
+            resolve(compressed);
+          };
+
+          img.onerror = () => reject(new Error("Failed to recompress image"));
+          img.src = base64;
+        });
+      };
+
       const imageDataPromises = images.map(async (img) => {
         if (img.file) {
           return compressImage(img.file);
         }
-        return img.url;
+        // Recompress cropped images to ensure small size
+        return recompressBase64(img.url);
       });
       const imageUrls = await Promise.all(imageDataPromises);
+
+      // Check payload size - foru.ms API likely has a limit around 500KB-1MB
+      const totalSize = imageUrls.reduce((sum, url) => sum + url.length, 0);
+      const totalSizeKB = totalSize / 1024;
+      console.log(`[Post] Total image data size: ${totalSizeKB.toFixed(1)} KB for ${imageUrls.length} images`);
+
+      // Reject if too large (100KB limit due to foru.ms API limitations)
+      const MAX_PAYLOAD_KB = 100;
+      if (totalSizeKB > MAX_PAYLOAD_KB) {
+        throw new Error(`Images are too large (${totalSizeKB.toFixed(0)}KB). Maximum is ${MAX_PAYLOAD_KB}KB. Please use fewer or smaller images.`);
+      }
 
       // Build post body - include image placeholders if any
       if (imageUrls.length > 0) {
@@ -143,13 +292,33 @@ export function CreatePostForm({
         extendedData.images = imageUrls;
       }
 
-      await forumsApi.posts.create({
+      // === DEBUG LOGGING ===
+      const payload = {
         threadId,
         body: postBody,
         userId: user?.id,
         extendedData:
           Object.keys(extendedData).length > 0 ? extendedData : undefined,
+      };
+
+      console.log("=== POST PAYLOAD DEBUG ===");
+      console.log("Thread ID:", threadId);
+      console.log("Body length:", postBody.length, "chars");
+      console.log("User ID:", user?.id);
+      console.log("Has extendedData:", Object.keys(extendedData).length > 0);
+      console.log("Number of images:", imageUrls.length);
+      
+      // Log each image size
+      imageUrls.forEach((url, i) => {
+        console.log(`  Image ${i + 1} size: ${(url.length / 1024).toFixed(1)} KB`);
       });
+      
+      // Log total payload size
+      const payloadJson = JSON.stringify(payload);
+      console.log("Total payload size:", (payloadJson.length / 1024).toFixed(1), "KB");
+      console.log("=========================");
+
+      await forumsApi.posts.create(payload);
 
       // If this is a trade post (WTS/WTB/WTT), update the thread's validCount
       const isTradePost = selectedTag !== null || detectedTrade !== null;
@@ -168,12 +337,14 @@ export function CreatePostForm({
                 market: {
                   ...currentMarket,
                   validCount: newValidCount,
-                  // Check if threshold met and unlock analytics
-                  analytics: {
-                    ...currentMarket.analytics,
-                    locked:
-                      newValidCount < (currentMarket.thresholdValid || 10),
-                  },
+                  // Only update analytics if it exists
+                  ...(currentMarket.analytics && {
+                    analytics: {
+                      ...currentMarket.analytics,
+                      locked:
+                        newValidCount < (currentMarket.thresholdValid || 10),
+                    },
+                  }),
                 },
               },
             });
@@ -185,14 +356,27 @@ export function CreatePostForm({
       }
 
       // Cleanup
-      images.forEach((img) => URL.revokeObjectURL(img.url));
+      images.forEach((img) => {
+        if (!img.url.startsWith("data:")) {
+          URL.revokeObjectURL(img.url);
+        }
+      });
       setBody("");
       setImages([]);
       setDetectedTrade(null);
       setSelectedTag(null);
       onPostCreated?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create post");
+      console.error("[Post] Error creating post:", err);
+      let errorMessage = "Failed to create post";
+      if (err instanceof Error) {
+        if (err.message.includes("413") || err.message.toLowerCase().includes("too large")) {
+          errorMessage = "Images are too large. Please try with fewer or smaller images.";
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -310,11 +494,12 @@ export function CreatePostForm({
                 }}
               />
               {/* Overlay with remove button */}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={() => removeImage(index)}
                   className="rounded-full bg-white/90 p-2 text-gray-800 transition-colors hover:bg-white"
+                  title="Remove image"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -322,6 +507,18 @@ export function CreatePostForm({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Image Cropper Modal */}
+      {cropImage && (
+        <ImageCropper
+          open={showCropper}
+          onClose={handleCropCancel}
+          imageSrc={cropImage}
+          onCropComplete={handleCropComplete}
+          aspectRatio={4 / 3}
+          title={`Crop Image ${currentCropIndex + 1}${pendingImages.length > 1 ? ` of ${pendingImages.length}` : ""}`}
+        />
       )}
 
       {/* Trade Detection Badge */}

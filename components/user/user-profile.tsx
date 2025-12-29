@@ -12,10 +12,12 @@ import { TrustDetails } from "./trust-details"
 import { UserListings } from "./user-listings"
 import { UserThreads } from "./user-threads"
 import { UserProfileSkeleton } from "./user-profile-skeleton"
+import { EditProfileModal } from "./edit-profile-modal"
 import { useAuth } from "@/lib/auth-context"
 import { formatDistanceToNow } from "date-fns"
 import { MessageSquare, Calendar, Edit, ShoppingBag, FileText } from "lucide-react"
 import Link from "next/link"
+import type { ForumsUser } from "@/lib/types"
 
 interface UserProfileProps {
   userId: string
@@ -24,11 +26,13 @@ interface UserProfileProps {
 export function UserProfile({ userId }: UserProfileProps) {
   const { user: currentUser } = useAuth()
   const [activeTab, setActiveTab] = useState("listings")
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   const {
     data: user,
     error,
     isLoading,
+    mutate,
   } = useSWR(["user", userId], () => forumsApi.users.get(userId), {
     revalidateOnFocus: false,
   })
@@ -53,6 +57,11 @@ export function UserProfile({ userId }: UserProfileProps) {
   const isOwnProfile = currentUser?.id === user.id
   const trust = user.extendedData?.trust
 
+  const handleProfileUpdated = (updatedUser: ForumsUser) => {
+    // Update the SWR cache with the new user data
+    mutate(updatedUser, false)
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       {/* Profile Header */}
@@ -73,12 +82,16 @@ export function UserProfile({ userId }: UserProfileProps) {
                   <p className="text-muted-foreground">@{user.username}</p>
                 </div>
                 {isOwnProfile ? (
-                  <Button variant="outline" size="sm">
+                  <Button 
+                    size="sm" 
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
                     <Edit className="mr-1 h-4 w-4" />
                     Edit Profile
                   </Button>
                 ) : (
-                  <Button size="sm" asChild>
+                  <Button size="sm" asChild className="bg-green-600 hover:bg-green-700 text-white">
                     <Link href={`/messages/compose?recipientId=${user.id}`}>
                       <MessageSquare className="mr-1 h-4 w-4" />
                       Message
@@ -86,6 +99,13 @@ export function UserProfile({ userId }: UserProfileProps) {
                   </Button>
                 )}
               </div>
+
+              {/* Bio */}
+              {user.bio && (
+                <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+                  {user.bio}
+                </p>
+              )}
 
               {/* Trust Badge & Join Date */}
               <div className="mt-4 flex flex-wrap items-center gap-4">
@@ -126,6 +146,17 @@ export function UserProfile({ userId }: UserProfileProps) {
           <UserThreads userId={userId} />
         </TabsContent>
       </Tabs>
+
+      {/* Edit Profile Modal */}
+      {isOwnProfile && (
+        <EditProfileModal
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          user={user}
+          onProfileUpdated={handleProfileUpdated}
+        />
+      )}
     </div>
   )
 }
+

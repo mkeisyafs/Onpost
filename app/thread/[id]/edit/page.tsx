@@ -17,6 +17,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ImageCropper } from "@/components/ui/image-cropper";
 import { X, ImageIcon, Loader2, Save, Edit, User } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
 import Link from "next/link";
@@ -46,6 +47,11 @@ export default function EditThreadPage() {
   } | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
+
+  // Image cropping state
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [cropType, setCropType] = useState<"cover" | "icon">("cover");
 
   useEffect(() => {
     async function fetchThread() {
@@ -77,9 +83,13 @@ export default function EditThreadPage() {
   const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      if (coverImage?.url && !coverImage.isExisting)
-        URL.revokeObjectURL(coverImage.url);
-      setCoverImage({ url: URL.createObjectURL(file), file });
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImageSrc(reader.result as string);
+        setCropType("cover");
+        setShowCropper(true);
+      };
+      reader.readAsDataURL(file);
     }
     if (coverInputRef.current) coverInputRef.current.value = "";
   };
@@ -87,10 +97,30 @@ export default function EditThreadPage() {
   const handleIconSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      if (icon?.url && !icon.isExisting) URL.revokeObjectURL(icon.url);
-      setIcon({ url: URL.createObjectURL(file), file });
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImageSrc(reader.result as string);
+        setCropType("icon");
+        setShowCropper(true);
+      };
+      reader.readAsDataURL(file);
     }
     if (iconInputRef.current) iconInputRef.current.value = "";
+  };
+
+  const handleCropComplete = (croppedImageUrl: string) => {
+    if (cropType === "cover") {
+      setCoverImage({ url: croppedImageUrl });
+    } else {
+      setIcon({ url: croppedImageUrl });
+    }
+    setShowCropper(false);
+    setCropImageSrc(null);
+  };
+
+  const handleCropCancel = () => {
+    setShowCropper(false);
+    setCropImageSrc(null);
   };
 
   const compressImage = async (
@@ -169,16 +199,32 @@ export default function EditThreadPage() {
       let coverImageBase64: string | undefined;
       let iconBase64: string | undefined;
 
-      if (coverImage?.file) {
-        coverImageBase64 = await compressImage(coverImage.file, 800);
-      } else if (coverImage?.isExisting) {
-        coverImageBase64 = coverImage.url;
+      // Handle cover image - could be cropped (base64), new file, or existing
+      if (coverImage?.url) {
+        if (coverImage.url.startsWith("data:")) {
+          // Already cropped as base64
+          coverImageBase64 = coverImage.url;
+        } else if (coverImage.file) {
+          // New uncropped file, compress it
+          coverImageBase64 = await compressImage(coverImage.file, 800);
+        } else if (coverImage.isExisting) {
+          // Existing image from server
+          coverImageBase64 = coverImage.url;
+        }
       }
 
-      if (icon?.file) {
-        iconBase64 = await compressImage(icon.file, 256);
-      } else if (icon?.isExisting) {
-        iconBase64 = icon.url;
+      // Handle icon - could be cropped (base64), new file, or existing
+      if (icon?.url) {
+        if (icon.url.startsWith("data:")) {
+          // Already cropped as base64
+          iconBase64 = icon.url;
+        } else if (icon.file) {
+          // New uncropped file, compress it
+          iconBase64 = await compressImage(icon.file, 256);
+        } else if (icon.isExisting) {
+          // Existing image from server
+          iconBase64 = icon.url;
+        }
       }
 
       const extendedData: ThreadExtendedData = {
@@ -346,7 +392,7 @@ export default function EditThreadPage() {
             )}
           </CardContent>
 
-          <CardFooter className="flex justify-between gap-4 pt-6 border-t">
+          <CardFooter className="flex justify-end gap-4 pt-6 border-t">
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               Cancel
             </Button>
@@ -371,6 +417,19 @@ export default function EditThreadPage() {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Image Cropper Modal */}
+      {cropImageSrc && (
+        <ImageCropper
+          open={showCropper}
+          onClose={handleCropCancel}
+          imageSrc={cropImageSrc}
+          onCropComplete={handleCropComplete}
+          aspectRatio={cropType === "cover" ? 3 / 1 : 1}
+          cropShape={cropType === "icon" ? "round" : "rect"}
+          title={cropType === "cover" ? "Crop Banner Image" : "Crop Icon"}
+        />
+      )}
     </div>
   );
 }

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { HomeFeed } from "@/components/home/home-feed";
 import { AIMarketAssistant } from "@/components/home/ai-market-assistant";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Flame, TrendingUp, Clock, MessageSquare } from "lucide-react";
+import { Flame, TrendingUp, Clock, MessageSquare, Plus } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
 
 interface FeedStats {
@@ -266,6 +268,19 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Mobile Floating Create Thread Button */}
+      <div className="fixed bottom-20 right-4 z-50 lg:hidden">
+        <Button
+          asChild
+          size="icon"
+          className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90"
+        >
+          <Link href="/thread/new">
+            <Plus className="h-6 w-6" />
+          </Link>
+        </Button>
       </div>
     </div>
   );

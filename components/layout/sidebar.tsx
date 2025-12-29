@@ -46,7 +46,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentCategory = searchParams.get("category");
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const [hotMarkets, setHotMarkets] = useState<HotMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [wtbCount, setWtbCount] = useState(0);
@@ -54,6 +54,12 @@ export function Sidebar() {
   const [authModalTab, setAuthModalTab] = useState<"signin" | "signup">(
     "signin"
   );
+  const [hasMounted, setHasMounted] = useState(false);
+
+  // Track client-side mount to prevent hydration mismatch
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   // Fetch real hot markets data from threads
   useEffect(() => {
@@ -94,7 +100,7 @@ export function Sidebar() {
             }
 
             marketsData.push({
-              name: name.length > 20 ? name.substring(0, 20) + "..." : name,
+              name: name.length > 25 ? name.substring(0, 25) + "..." : name,
               slug,
               active: count,
               threadId: thread.id,
@@ -119,7 +125,7 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="hidden w-64 shrink-0 lg:block">
+    <aside className="hidden w-72 shrink-0 lg:block">
       <div className="sticky top-16 flex h-[calc(100vh-4rem)] flex-col gap-4 overflow-y-auto p-4">
         {/* Create Button - Gradient */}
         <Button
@@ -206,10 +212,10 @@ export function Sidebar() {
                     "hover:bg-background"
                   )}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <span
                       className={cn(
-                        "flex h-6 w-6 items-center justify-center rounded-lg text-xs font-bold",
+                        "flex h-6 w-6 items-center justify-center rounded-lg text-xs font-bold shrink-0",
                         index === 0
                           ? "bg-yellow-500/20 text-yellow-600"
                           : index === 1
@@ -221,7 +227,7 @@ export function Sidebar() {
                     >
                       {index + 1}
                     </span>
-                    <span className="text-muted-foreground group-hover:text-foreground truncate max-w-32 transition-colors">
+                    <span className="text-muted-foreground group-hover:text-foreground truncate transition-colors">
                       {market.name}
                     </span>
                   </div>
@@ -272,7 +278,16 @@ export function Sidebar() {
 
         {/* Footer - User Profile */}
         <div className="mt-auto p-3 rounded-2xl bg-muted/50 border border-border/50">
-          {isAuthenticated && user ? (
+          {!hasMounted ? (
+            // Loading skeleton - renders the same on server and client
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </div>
+          ) : isAuthenticated && user ? (
             <div className="flex items-center gap-3">
               <Link href={`/user/${user.id}`} className="relative">
                 <Avatar className="h-10 w-10 border-2 border-primary/30">

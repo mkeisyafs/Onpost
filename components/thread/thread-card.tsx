@@ -82,15 +82,20 @@ export function ThreadCard({ thread }: ThreadCardProps) {
   const market = thread.extendedData?.market;
   const coverImage = thread.extendedData?.coverImage;
   const threadIcon = thread.extendedData?.icon;
-  const hasMarketData = market?.marketEnabled && !market.analytics.locked;
+  const hasMarketData = market?.marketEnabled && !market?.analytics?.locked;
 
   const intent = detectIntent(thread.title, thread.body);
 
-  // Fetch posts to get actual count
+  // Fetch posts to get actual count (with error resilience)
   const { data: postsData } = useSWR(
     ["thread-posts-count", thread.id],
     () => forumsApi.posts.list(thread.id, { limit: 1 }),
-    { revalidateOnFocus: false }
+    {
+      revalidateOnFocus: false,
+      // Don't spam retries on 500 errors
+      shouldRetryOnError: false,
+      errorRetryCount: 0,
+    }
   );
 
   // Use real data from thread or fetched data

@@ -25,16 +25,16 @@ export function ThreadTabs({
       id: "market" as const,
       label: "Market",
       icon: TrendingUp,
-      locked: market?.analytics.locked,
-      progress: market?.analytics.locked
-        ? `${market.validCount}/10`
+      locked: market?.analytics?.locked,
+      progress: market?.analytics?.locked
+        ? `${market?.validCount ?? 0}/10`
         : undefined,
     },
     {
       id: "insights" as const,
       label: "Insights",
       icon: Sparkles,
-      locked: market?.analytics.locked,
+      locked: market?.analytics?.locked,
     },
   ];
 

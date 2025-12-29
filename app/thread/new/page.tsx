@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { ImageCropper } from "@/components/ui/image-cropper";
 import {
   X,
   ImageIcon,
@@ -33,10 +34,11 @@ import {
   Tag as TagIcon,
   TrendingUp,
   User,
+  Loader2,
 } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
 import Link from "next/link";
-import type { ThreadMarketData, Tag, ThreadExtendedData } from "@/lib/types";
+import type { Tag, ThreadExtendedData } from "@/lib/types";
 
 export default function NewThreadPage() {
   const router = useRouter();
@@ -45,9 +47,6 @@ export default function NewThreadPage() {
   const [body, setBody] = useState("");
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [enableMarket, setEnableMarket] = useState(false);
-  const [marketCategory, setMarketCategory] = useState<
-    "ITEM_MARKET" | "ACCOUNT_MARKET" | "PHYSICAL_ITEM" | "GENERAL"
-  >("ITEM_MARKET");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverImage, setCoverImage] = useState<{
@@ -64,6 +63,11 @@ export default function NewThreadPage() {
     "game-items" | "accounts" | "physical" | "services"
   >("game-items");
 
+  // Image cropping state
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [cropType, setCropType] = useState<"cover" | "icon">("cover");
+
   // Thread categories for filtering
   const threadCategories = [
     { value: "game-items", label: "Game Items", icon: "🎮" },
@@ -72,32 +76,16 @@ export default function NewThreadPage() {
     { value: "services", label: "Services", icon: "🛒" },
   ] as const;
 
-  const marketCategories = [
-    {
-      value: "ITEM_MARKET",
-      label: "Game Items",
-      desc: "In-game items, currency, materials",
-      icon: "🎮",
-    },
-    {
-      value: "ACCOUNT_MARKET",
-      label: "Game Accounts",
-      desc: "Full accounts, characters, profiles",
-      icon: "👤",
-    },
-    {
-      value: "PHYSICAL_ITEM",
-      label: "Physical Items",
-      desc: "Electronics, fashion, collectibles",
-      icon: "📦",
-    },
-    {
-      value: "GENERAL",
-      label: "General",
-      desc: "Services, other items",
-      icon: "🛒",
-    },
-  ];
+  // Map thread category to market type (they should always match)
+  const getMarketType = (category: typeof threadCategory) => {
+    const mapping: Record<typeof threadCategory, "ITEM_MARKET" | "ACCOUNT_MARKET" | "PHYSICAL_ITEM" | "GENERAL"> = {
+      "game-items": "ITEM_MARKET",
+      "accounts": "ACCOUNT_MARKET",
+      "physical": "PHYSICAL_ITEM",
+      "services": "GENERAL",
+    };
+    return mapping[category];
+  };
 
   useEffect(() => {
     async function fetchMeta() {
@@ -127,8 +115,13 @@ export default function NewThreadPage() {
   const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      if (coverImage?.url) URL.revokeObjectURL(coverImage.url);
-      setCoverImage({ url: URL.createObjectURL(file), file });
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImageSrc(reader.result as string);
+        setCropType("cover");
+        setShowCropper(true);
+      };
+      reader.readAsDataURL(file);
     }
     if (coverInputRef.current) coverInputRef.current.value = "";
   };
@@ -136,10 +129,36 @@ export default function NewThreadPage() {
   const handleIconSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      if (icon?.url) URL.revokeObjectURL(icon.url);
-      setIcon({ url: URL.createObjectURL(file), file });
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImageSrc(reader.result as string);
+        setCropType("icon");
+        setShowCropper(true);
+      };
+      reader.readAsDataURL(file);
     }
     if (iconInputRef.current) iconInputRef.current.value = "";
+  };
+
+  const handleCropComplete = (croppedImageUrl: string) => {
+    if (cropType === "cover") {
+      if (coverImage?.url && !coverImage.url.startsWith("data:")) {
+        URL.revokeObjectURL(coverImage.url);
+      }
+      setCoverImage({ url: croppedImageUrl });
+    } else {
+      if (icon?.url && !icon.url.startsWith("data:")) {
+        URL.revokeObjectURL(icon.url);
+      }
+      setIcon({ url: croppedImageUrl });
+    }
+    setShowCropper(false);
+    setCropImageSrc(null);
+  };
+
+  const handleCropCancel = () => {
+    setShowCropper(false);
+    setCropImageSrc(null);
   };
 
   const compressImage = async (
@@ -200,9 +219,40 @@ export default function NewThreadPage() {
     );
   }
 
+  // Validation constants
+  const TITLE_MIN_LENGTH = 3;
+  const TITLE_MAX_LENGTH = 255;
+  const BODY_MIN_LENGTH = 10;
+  const BODY_MAX_LENGTH = 50000;
+
+  // Validation state
+  const titleTrimmed = title.trim();
+  const bodyTrimmed = body.trim();
+  
+  const isTitleValid = titleTrimmed.length >= TITLE_MIN_LENGTH && titleTrimmed.length <= TITLE_MAX_LENGTH;
+  const isBodyValid = bodyTrimmed.length >= BODY_MIN_LENGTH && bodyTrimmed.length <= BODY_MAX_LENGTH;
+  const canSubmit = isTitleValid && isBodyValid && !isSubmitting;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !body.trim()) return;
+    
+    // Client-side validation
+    if (titleTrimmed.length < TITLE_MIN_LENGTH) {
+      setError(`Title must be at least ${TITLE_MIN_LENGTH} characters`);
+      return;
+    }
+    if (titleTrimmed.length > TITLE_MAX_LENGTH) {
+      setError(`Title must be ${TITLE_MAX_LENGTH} characters or less`);
+      return;
+    }
+    if (bodyTrimmed.length < BODY_MIN_LENGTH) {
+      setError(`Content must be at least ${BODY_MIN_LENGTH} characters`);
+      return;
+    }
+    if (bodyTrimmed.length > BODY_MAX_LENGTH) {
+      setError(`Content must be ${BODY_MAX_LENGTH.toLocaleString()} characters or less`);
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
@@ -211,43 +261,34 @@ export default function NewThreadPage() {
       let coverImageBase64: string | undefined;
       let iconBase64: string | undefined;
 
-      if (coverImage?.file) {
-        coverImageBase64 = await compressImage(coverImage.file, 800);
-      }
-      if (icon?.file) {
-        iconBase64 = await compressImage(icon.file, 256);
+      // Handle cover image - could be cropped (base64) or uncropped (file)
+      if (coverImage?.url) {
+        if (coverImage.url.startsWith("data:")) {
+          // Already cropped as base64
+          coverImageBase64 = coverImage.url;
+        } else if (coverImage.file) {
+          // Uncropped file, compress it
+          coverImageBase64 = await compressImage(coverImage.file, 800);
+        }
       }
 
-      const marketData: ThreadMarketData | undefined = enableMarket
+      // Handle icon - could be cropped (base64) or uncropped (file)
+      if (icon?.url) {
+        if (icon.url.startsWith("data:")) {
+          // Already cropped as base64
+          iconBase64 = icon.url;
+        } else if (icon.file) {
+          // Uncropped file, compress it
+          iconBase64 = await compressImage(icon.file, 256);
+        }
+      }
+
+      // Simplified market data - market type derived from thread category
+      // The full market analytics will be computed server-side
+      const marketData = enableMarket
         ? {
             marketEnabled: true,
-            marketTypeFinal: marketCategory,
-            marketTypeCandidate: marketCategory,
-            windowDays: 14,
-            thresholdValid: 10,
-            validCount: 0,
-            lastWindowCutoffAt: 0,
-            lastProcessed: {
-              mode: "OLDEST",
-              cursor: null,
-              lastPostIdProcessed: "",
-              at: 0,
-            },
-            classification: {
-              confidence: 0,
-              method: "RULE",
-              version: "1.0.0",
-              classifiedAt: Date.now(),
-              lockedAt: null,
-            },
-            analytics: {
-              locked: true,
-              updatedAt: Date.now(),
-              snapshot: null,
-              narrative: null,
-              narrativeUpdatedAt: null,
-              version: "1.0.0",
-            },
+            marketTypeFinal: getMarketType(threadCategory),
           }
         : undefined;
 
@@ -259,8 +300,8 @@ export default function NewThreadPage() {
       if (iconBase64) extendedData.icon = iconBase64;
 
       const thread = await forumsApi.threads.create({
-        title: title.trim(),
-        body: body.trim(),
+        title: titleTrimmed,
+        body: bodyTrimmed,
         userId: user?.id,
         tags:
           selectedTags.length > 0 ? selectedTags.map((t) => t.id) : undefined,
@@ -392,29 +433,61 @@ export default function NewThreadPage() {
 
             {/* Title */}
             <div className="space-y-2 pt-4">
-              <Label htmlFor="title">Title</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="title">Title</Label>
+                <span className={`text-xs ${
+                  titleTrimmed.length < TITLE_MIN_LENGTH 
+                    ? 'text-muted-foreground' 
+                    : titleTrimmed.length > TITLE_MAX_LENGTH 
+                      ? 'text-destructive' 
+                      : 'text-green-600'
+                }`}>
+                  {titleTrimmed.length}/{TITLE_MAX_LENGTH}
+                </span>
+              </div>
               <Input
                 id="title"
-                placeholder="Enter a catchy title..."
+                placeholder="Enter a catchy title (min. 3 characters)..."
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="h-12 text-lg"
+                className={`h-12 text-lg ${titleTrimmed.length > 0 && !isTitleValid ? 'border-destructive' : ''}`}
                 required
+                minLength={TITLE_MIN_LENGTH}
+                maxLength={TITLE_MAX_LENGTH}
               />
+              {titleTrimmed.length > 0 && titleTrimmed.length < TITLE_MIN_LENGTH && (
+                <p className="text-xs text-destructive">Title must be at least {TITLE_MIN_LENGTH} characters</p>
+              )}
             </div>
 
             {/* Content */}
             <div className="space-y-2">
-              <Label htmlFor="body">Content</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="body">Content</Label>
+                <span className={`text-xs ${
+                  bodyTrimmed.length < BODY_MIN_LENGTH 
+                    ? 'text-muted-foreground' 
+                    : bodyTrimmed.length > BODY_MAX_LENGTH 
+                      ? 'text-destructive' 
+                      : 'text-green-600'
+                }`}>
+                  {bodyTrimmed.length}/{BODY_MAX_LENGTH.toLocaleString()}
+                </span>
+              </div>
               <Textarea
                 id="body"
-                placeholder="Share your thoughts..."
+                placeholder="Share your thoughts (min. 10 characters)..."
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={6}
-                className="resize-none"
+                className={`resize-none ${bodyTrimmed.length > 0 && !isBodyValid ? 'border-destructive' : ''}`}
                 required
+                minLength={BODY_MIN_LENGTH}
+                maxLength={BODY_MAX_LENGTH}
               />
+              {bodyTrimmed.length > 0 && bodyTrimmed.length < BODY_MIN_LENGTH && (
+                <p className="text-xs text-destructive">Content must be at least {BODY_MIN_LENGTH} characters</p>
+              )}
             </div>
 
             {/* Category Selector */}
@@ -507,37 +580,12 @@ export default function NewThreadPage() {
               />
             </div>
 
-            {/* Market Category Selector - Show only when market is enabled */}
+            {/* Info: Market category matches thread category */}
             {enableMarket && (
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2">
-                  <TagIcon className="h-4 w-4 text-muted-foreground" />
-                  Market Category
-                </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {marketCategories.map((cat) => (
-                    <button
-                      key={cat.value}
-                      type="button"
-                      onClick={() =>
-                        setMarketCategory(cat.value as typeof marketCategory)
-                      }
-                      className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
-                        marketCategory === cat.value
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:border-primary/50 hover:bg-muted/50"
-                      }`}
-                    >
-                      <span className="text-xl">{cat.icon}</span>
-                      <div>
-                        <p className="font-medium text-sm">{cat.label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {cat.desc}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+              <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
+                <p className="text-sm text-green-600 dark:text-green-400">
+                  ✓ Market analytics will track <strong>{threadCategories.find(c => c.value === threadCategory)?.label}</strong> prices
+                </p>
               </div>
             )}
 
@@ -554,13 +602,13 @@ export default function NewThreadPage() {
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting || !title.trim() || !body.trim()}
+              disabled={!canSubmit}
               className="px-8 rounded-full"
               size="lg"
             >
               {isSubmitting ? (
                 <>
-                  <Sparkles className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating...
                 </>
               ) : (
@@ -573,6 +621,19 @@ export default function NewThreadPage() {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Image Cropper Modal */}
+      {cropImageSrc && (
+        <ImageCropper
+          open={showCropper}
+          onClose={handleCropCancel}
+          imageSrc={cropImageSrc}
+          onCropComplete={handleCropComplete}
+          aspectRatio={cropType === "cover" ? 3 / 1 : 1}
+          cropShape={cropType === "icon" ? "round" : "rect"}
+          title={cropType === "cover" ? "Crop Banner Image" : "Crop Icon"}
+        />
+      )}
     </div>
   );
 }

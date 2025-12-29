@@ -43,11 +43,16 @@ export function ThreadView({ threadId }: ThreadViewProps) {
     revalidateOnFocus: false,
   });
 
-  // Fetch posts to get actual count
+  // Fetch posts to get actual count (with error resilience)
   const { data: postsData } = useSWR(
     thread ? ["posts-count", threadId, refreshKey] : null,
     () => forumsApi.posts.list(threadId, { limit: 1 }),
-    { revalidateOnFocus: false }
+    {
+      revalidateOnFocus: false,
+      // Don't spam retries on 500 errors
+      shouldRetryOnError: false,
+      errorRetryCount: 0,
+    }
   );
 
   // Handle scroll to show/hide scroll-to-top button
@@ -198,7 +203,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
       </div>
 
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
+      <div className="fixed bottom-20 lg:bottom-6 right-6 flex flex-col gap-3 z-50">
         {/* Scroll to Top */}
         {showScrollTop && (
           <Button
