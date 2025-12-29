@@ -15,7 +15,8 @@ export interface ForumsUser {
   signature?: string;
   url?: string;
   avatarUrl?: string | null;
-  createdAt?: string;
+  createdAt: string;
+  updatedAt?: string;
   extendedData?: UserExtendedData;
 }
 
@@ -159,35 +160,36 @@ export interface AccountMarketSnapshot {
 export interface ThreadMarketData {
   marketEnabled: boolean;
   marketTypeFinal:
-    | "ITEM_MARKET"
-    | "ACCOUNT_MARKET"
-    | "PHYSICAL_ITEM"
-    | "GENERAL"
-    | null;
-  marketTypeCandidate:
-    | "ITEM_MARKET"
-    | "ACCOUNT_MARKET"
-    | "PHYSICAL_ITEM"
-    | "GENERAL"
-    | "UNKNOWN";
-  windowDays: number;
-  thresholdValid: number;
-  validCount: number;
-  lastWindowCutoffAt: number;
-  lastProcessed: {
+  | "ITEM_MARKET"
+  | "ACCOUNT_MARKET"
+  | "PHYSICAL_ITEM"
+  | "GENERAL"
+  | null;
+  // Optional fields - computed server-side
+  marketTypeCandidate?:
+  | "ITEM_MARKET"
+  | "ACCOUNT_MARKET"
+  | "PHYSICAL_ITEM"
+  | "GENERAL"
+  | "UNKNOWN";
+  windowDays?: number;
+  thresholdValid?: number;
+  validCount?: number;
+  lastWindowCutoffAt?: number;
+  lastProcessed?: {
     mode: "NEWEST" | "OLDEST";
     cursor: string | null;
     lastPostIdProcessed: string;
     at: number;
   };
-  classification: {
+  classification?: {
     confidence: number;
     method: "RULE" | "AI";
     version: string;
     classifiedAt: number;
     lockedAt: number | null;
   };
-  analytics: {
+  analytics?: {
     locked: boolean;
     updatedAt: number;
     snapshot: MarketSnapshot | AccountMarketSnapshot | null;

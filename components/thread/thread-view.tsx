@@ -48,8 +48,20 @@ export function ThreadView({ threadId }: ThreadViewProps) {
     shouldRetryOnError: false, // Don't auto-retry on error
   });
 
-  // Use thread.postCount directly - no separate API call needed
-  // PostList component will fetch actual posts when rendered
+  // Fetch posts to get actual count (with error resilience)
+  const { data: postsData } = useSWR(
+    thread ? ["posts-count", threadId, refreshKey] : null,
+    () => forumsApi.posts.list(threadId, { limit: 100, filter: "newest" }),
+    {
+      revalidateOnFocus: false,
+      // Don't spam retries on 500 errors
+      shouldRetryOnError: false,
+      errorRetryCount: 0,
+    }
+  );
+
+  // Get actual post count from fetched data
+  const actualPostCount = postsData?.posts?.length ?? thread?.postCount ?? 0;
 
   // Handle scroll to show/hide scroll-to-top button
   useEffect(() => {
@@ -136,7 +148,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
     <>
       <div className="mx-auto max-w-4xl px-4 py-6">
         {/* Thread Header */}
-        <ThreadHeader thread={thread} postCount={thread.postCount ?? 0} />
+        <ThreadHeader thread={thread} postCount={actualPostCount} />
 
         {/* Market Tabs */}
         {hasMarket && (
@@ -156,7 +168,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
                 <h2 className="text-lg font-semibold text-foreground">
                   Post
                   <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({thread.postCount ?? 0})
+                    ({actualPostCount})
                   </span>
                 </h2>
               </div>
@@ -196,7 +208,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
       </div>
 
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
+      <div className="fixed bottom-20 lg:bottom-6 right-6 flex flex-col gap-3 z-50">
         {/* Scroll to Top */}
         {showScrollTop && (
           <Button

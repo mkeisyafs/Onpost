@@ -6,15 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ImageCropper } from "@/components/ui/image-cropper";
 import { TradeBadge } from "./trade-badge";
 import {
   hasHighLikelihoodTradePattern,
   createTradeData,
 } from "@/lib/trade-detection";
 import forumsApi from "@/lib/forums-api";
-import { uploadImage, compressImage } from "@/lib/file-api";
+import { uploadImage, uploadBase64Image, compressImage } from "@/lib/file-api";
 import { useAuth } from "@/lib/auth-context";
-import { ImageIcon, X, Smile, MapPin, Send, Loader2 } from "lucide-react";
+import { ImageIcon, X, Smile, MapPin, Send, Loader2, Crop } from "lucide-react";
 
 interface CreatePostFormProps {
   threadId: string;
@@ -40,6 +41,12 @@ export function CreatePostForm({
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Cropping state
+  const [cropImage, setCropImage] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [currentCropIndex, setCurrentCropIndex] = useState(0);
+
   // Detect trade pattern as user types
   useEffect(() => {
     if (body.trim() && hasHighLikelihoodTradePattern(body)) {
@@ -50,20 +57,119 @@ export function CreatePostForm({
     }
   }, [body]);
 
+  const MAX_IMAGES = 10; // Reduced to prevent API issues
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
-      if (file.type.startsWith("image/")) {
-        const url = URL.createObjectURL(file);
-        setImages((prev) => [...prev, { url, file }]);
-      }
-    });
+    const imageFiles = Array.from(files).filter((file) =>
+      file.type.startsWith("image/")
+    );
+
+    if (imageFiles.length === 0) return;
+
+    // Check if adding these would exceed limit
+    const remainingSlots = MAX_IMAGES - images.length;
+    if (remainingSlots <= 0) {
+      setError(`Maximum ${MAX_IMAGES} images allowed per post`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    // Limit the images to remaining slots
+    const filesToProcess = imageFiles.slice(0, remainingSlots);
+
+    // Queue images for cropping
+    setPendingImages(filesToProcess);
+    setCurrentCropIndex(0);
+
+    // Load first image for cropping
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImage(reader.result as string);
+      setShowCropper(true);
+    };
+    reader.readAsDataURL(filesToProcess[0]);
 
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  };
+
+  const handleCropComplete = (croppedImageUrl: string) => {
+    // Add cropped image to list
+    setImages((prev) => [...prev, { url: croppedImageUrl }]);
+
+    // Check if there are more images to crop
+    const nextIndex = currentCropIndex + 1;
+    if (nextIndex < pendingImages.length) {
+      setCurrentCropIndex(nextIndex);
+      try {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setCropImage(reader.result as string);
+        };
+        reader.onerror = () => {
+          console.error("Failed to read image file");
+          // Skip to next or finish
+          if (nextIndex + 1 < pendingImages.length) {
+            setCurrentCropIndex(nextIndex + 1);
+          } else {
+            setShowCropper(false);
+            setCropImage(null);
+            setPendingImages([]);
+            setCurrentCropIndex(0);
+          }
+        };
+        reader.readAsDataURL(pendingImages[nextIndex]);
+      } catch (err) {
+        console.error("Error reading next image:", err);
+        setShowCropper(false);
+        setCropImage(null);
+        setPendingImages([]);
+        setCurrentCropIndex(0);
+      }
+    } else {
+      // All images processed
+      setShowCropper(false);
+      setCropImage(null);
+      setPendingImages([]);
+      setCurrentCropIndex(0);
+    }
+  };
+
+  const handleCropCancel = () => {
+    // Skip current image and move to next
+    const nextIndex = currentCropIndex + 1;
+    if (nextIndex < pendingImages.length) {
+      setCurrentCropIndex(nextIndex);
+      try {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setCropImage(reader.result as string);
+        };
+        reader.onerror = () => {
+          console.error("Failed to read image file");
+          setShowCropper(false);
+          setCropImage(null);
+          setPendingImages([]);
+          setCurrentCropIndex(0);
+        };
+        reader.readAsDataURL(pendingImages[nextIndex]);
+      } catch (err) {
+        console.error("Error reading next image:", err);
+        setShowCropper(false);
+        setCropImage(null);
+        setPendingImages([]);
+        setCurrentCropIndex(0);
+      }
+    } else {
+      setShowCropper(false);
+      setCropImage(null);
+      setPendingImages([]);
+      setCurrentCropIndex(0);
     }
   };
 
@@ -93,14 +199,22 @@ export function CreatePostForm({
       if (images.length > 0) {
         setIsUploading(true);
         for (const img of images) {
-          if (img.file) {
-            try {
+          try {
+            if (img.file) {
+              // New file - compress and upload
               const compressed = await compressImage(img.file, 1024, 0.8);
               const result = await uploadImage(compressed);
               uploadedImageUrls.push(result.url);
-            } catch (uploadErr) {
-              console.error("Failed to upload image:", uploadErr);
+            } else if (img.url && img.url.startsWith("data:")) {
+              // Cropped image (base64 from cropper) - upload directly
+              const result = await uploadBase64Image(img.url);
+              uploadedImageUrls.push(result.url);
+            } else if (img.url && img.url.startsWith("http")) {
+              // Already a URL (existing image) - keep as-is
+              uploadedImageUrls.push(img.url);
             }
+          } catch (uploadErr) {
+            console.error("Failed to upload image:", uploadErr);
           }
         }
         setIsUploading(false);
@@ -122,21 +236,52 @@ export function CreatePostForm({
         extendedData.images = uploadedImageUrls;
       }
 
-      await forumsApi.posts.create({
+      // === DEBUG LOGGING ===
+      const payload = {
         threadId,
         body: postBody,
         userId: user?.id,
         extendedData:
           Object.keys(extendedData).length > 0 ? extendedData : undefined,
+      };
+
+      console.log("=== POST PAYLOAD DEBUG ===");
+      console.log("Thread ID:", threadId);
+      console.log("Body length:", postBody.length, "chars");
+      console.log("User ID:", user?.id);
+      console.log("Has extendedData:", Object.keys(extendedData).length > 0);
+      console.log("Number of images:", uploadedImageUrls.length);
+
+      // Log each image size
+      uploadedImageUrls.forEach((url: string, i: number) => {
+        console.log(
+          `  Image ${i + 1} size: ${(url.length / 1024).toFixed(1)} KB`
+        );
       });
 
+      // Log total payload size
+      const payloadJson = JSON.stringify(payload);
+      console.log(
+        "Total payload size:",
+        (payloadJson.length / 1024).toFixed(1),
+        "KB"
+      );
+      console.log("=========================");
+
+      await forumsApi.posts.create(payload);
+
       // If this is a trade post (WTS/WTB/WTT), update the thread's validCount
+      // Only thread owners can update thread metadata
       const isTradePost = selectedTag !== null || detectedTrade !== null;
       if (isTradePost) {
         try {
-          // Fetch current thread to get market data
+          // Fetch current thread to get market data and check ownership
           const thread = await forumsApi.threads.get(threadId);
-          if (thread.extendedData?.market) {
+          const threadOwnerId = thread.authorId || thread.userId;
+          const isThreadOwner = user?.id === threadOwnerId;
+
+          // Only update if user is thread owner and market data exists
+          if (isThreadOwner && thread.extendedData?.market) {
             const currentMarket = thread.extendedData.market;
             const newValidCount = (currentMarket.validCount || 0) + 1;
 
@@ -147,31 +292,50 @@ export function CreatePostForm({
                 market: {
                   ...currentMarket,
                   validCount: newValidCount,
-                  // Check if threshold met and unlock analytics
-                  analytics: {
-                    ...currentMarket.analytics,
-                    locked:
-                      newValidCount < (currentMarket.thresholdValid || 10),
-                  },
+                  // Only update analytics if it exists
+                  ...(currentMarket.analytics && {
+                    analytics: {
+                      ...currentMarket.analytics,
+                      locked:
+                        newValidCount < (currentMarket.thresholdValid || 10),
+                    },
+                  }),
                 },
               },
             });
           }
         } catch (err) {
-          console.error("Failed to update trade count:", err);
+          // Silently ignore - trade count updates are optional
           // Don't fail the post creation even if count update fails
         }
       }
 
       // Cleanup
-      images.forEach((img) => URL.revokeObjectURL(img.url));
+      images.forEach((img) => {
+        if (!img.url.startsWith("data:")) {
+          URL.revokeObjectURL(img.url);
+        }
+      });
       setBody("");
       setImages([]);
       setDetectedTrade(null);
       setSelectedTag(null);
       onPostCreated?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create post");
+      console.error("[Post] Error creating post:", err);
+      let errorMessage = "Failed to create post";
+      if (err instanceof Error) {
+        if (
+          err.message.includes("413") ||
+          err.message.toLowerCase().includes("too large")
+        ) {
+          errorMessage =
+            "Images are too large. Please try with fewer or smaller images.";
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -288,11 +452,12 @@ export function CreatePostForm({
                 }}
               />
               {/* Overlay with remove button */}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={() => removeImage(index)}
                   className="rounded-full bg-white/90 p-2 text-gray-800 transition-colors hover:bg-white"
+                  title="Remove image"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -300,6 +465,20 @@ export function CreatePostForm({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Image Cropper Modal */}
+      {cropImage && (
+        <ImageCropper
+          open={showCropper}
+          onClose={handleCropCancel}
+          imageSrc={cropImage}
+          onCropComplete={handleCropComplete}
+          aspectRatio={4 / 3}
+          title={`Crop Image ${currentCropIndex + 1}${
+            pendingImages.length > 1 ? ` of ${pendingImages.length}` : ""
+          }`}
+        />
       )}
 
       {/* Trade Detection Badge */}

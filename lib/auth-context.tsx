@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const userData = await forumsApi.auth.me()
+      const userData = await forumsApi.auth.me({ suppressErrorLogging: true })
       setUser(userData)
     } catch {
       setAccessToken(null)

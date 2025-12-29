@@ -184,15 +184,19 @@ export function ThreadCard({ thread }: ThreadCardProps) {
 
         {/* Tags & Stats with Micro-interactions */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {thread.tags?.slice(0, 2).map((tag) => (
-            <Badge
-              key={tag}
-              variant="secondary"
-              className="text-xs px-2 py-0.5 rounded-full bg-muted/50"
-            >
-              #{tag}
-            </Badge>
-          ))}
+          {thread.tags?.slice(0, 2).map((tag) => {
+            const tagName = typeof tag === "string" ? tag : tag.name;
+            const tagKey = typeof tag === "string" ? tag : tag.id;
+            return (
+              <Badge
+                key={tagKey}
+                variant="secondary"
+                className="text-xs px-2 py-0.5 rounded-full bg-muted/50"
+              >
+                #{tagName}
+              </Badge>
+            );
+          })}
           {thread.tags && thread.tags.length > 2 && (
             <span className="text-xs text-muted-foreground">
               +{thread.tags.length - 2}

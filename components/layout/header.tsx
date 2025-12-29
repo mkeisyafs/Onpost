@@ -111,13 +111,6 @@ export function Header() {
 
           {isAuthenticated ? (
             <>
-              <Button variant="ghost" size="sm" asChild className="h-9">
-                <Link href="/thread/new">
-                  <Plus className="h-4 w-4 mr-1" />
-                  New Thread
-                </Link>
-              </Button>
-
               <Button variant="ghost" size="icon" asChild className="h-9 w-9">
                 <Link href="/messages">
                   <MessageSquare className="h-4 w-4" />
@@ -147,13 +140,13 @@ export function Header() {
                   align="end"
                   className="w-48 rounded-lg border-border bg-card"
                 >
-                  <DropdownMenuItem asChild className="rounded-md">
+                  <DropdownMenuItem asChild className="rounded-md focus:bg-primary/10 focus:text-primary dark:focus:bg-primary dark:focus:text-white cursor-pointer transition-colors">
                     <Link href={`/user/${user?.id}`}>
                       <User className="mr-2 h-4 w-4" />
                       Profile
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="rounded-md">
+                  <DropdownMenuItem asChild className="rounded-md focus:bg-primary/10 focus:text-primary dark:focus:bg-primary dark:focus:text-white cursor-pointer transition-colors">
                     <Link href="/messages">
                       <MessageSquare className="mr-2 h-4 w-4" />
                       Messages
@@ -162,7 +155,7 @@ export function Header() {
                   <DropdownMenuSeparator className="bg-border" />
                   <DropdownMenuItem
                     onClick={logout}
-                    className="rounded-md text-destructive focus:text-destructive"
+                    className="rounded-md text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign Out
@@ -214,85 +207,115 @@ export function Header() {
         </Button>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu - Fixed Overlay */}
       {mobileMenuOpen && (
-        <div className="relative border-t border-border bg-background/95 backdrop-blur-2xl px-4 py-3 md:hidden">
-          <nav className="flex flex-col gap-1">
-            {/* Theme toggle mobile */}
-            <Button
-              variant="ghost"
-              className="justify-start h-10"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-              {theme === "dark" ? (
+        <>
+          {/* Backdrop - click to close */}
+          <div 
+            className="fixed inset-0 top-16 z-40 bg-black/50 md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          
+          {/* Menu Content */}
+          <div className="fixed left-0 right-0 top-16 z-50 border-b border-border bg-background/95 backdrop-blur-2xl px-4 py-3 md:hidden shadow-lg">
+            <nav className="flex flex-col gap-1">
+              {/* Theme toggle mobile */}
+              <Button
+                variant="ghost"
+                className="justify-start h-10 hover:bg-primary/10 hover:text-primary dark:hover:bg-primary dark:hover:text-white focus:bg-primary/10 focus:text-primary dark:focus:bg-primary dark:focus:text-white transition-colors"
+                onClick={() => {
+                  setTheme(theme === "dark" ? "light" : "dark");
+                  setMobileMenuOpen(false);
+                }}
+              >
+                {theme === "dark" ? (
+                  <>
+                    <Sun className="mr-2 h-4 w-4" />
+                    Light Mode
+                  </>
+                ) : (
+                  <>
+                    <Moon className="mr-2 h-4 w-4" />
+                    Dark Mode
+                  </>
+                )}
+              </Button>
+
+              {isAuthenticated ? (
                 <>
-                  <Sun className="mr-2 h-4 w-4" />
-                  Light Mode
+                  <Button 
+                    variant="ghost" 
+                    className="justify-start h-10 hover:bg-primary/10 hover:text-primary dark:hover:bg-primary dark:hover:text-white focus:bg-primary/10 focus:text-primary dark:focus:bg-primary dark:focus:text-white transition-colors" 
+                    asChild
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <Link href="/thread/new">
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Thread
+                    </Link>
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="justify-start h-10 hover:bg-primary/10 hover:text-primary dark:hover:bg-primary dark:hover:text-white focus:bg-primary/10 focus:text-primary dark:focus:bg-primary dark:focus:text-white transition-colors" 
+                    asChild
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <Link href="/messages">
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Messages
+                    </Link>
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="justify-start h-10 hover:bg-primary/10 hover:text-primary dark:hover:bg-primary dark:hover:text-white focus:bg-primary/10 focus:text-primary dark:focus:bg-primary dark:focus:text-white transition-colors" 
+                    asChild
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <Link href={`/user/${user?.id}`}>
+                      <User className="mr-2 h-4 w-4" />
+                      Profile
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="justify-start h-10 text-destructive hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive transition-colors"
+                    onClick={() => {
+                      logout();
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign Out
+                  </Button>
                 </>
               ) : (
                 <>
-                  <Moon className="mr-2 h-4 w-4" />
-                  Dark Mode
+                  <Button
+                    variant="ghost"
+                    className="justify-start h-10 hover:bg-primary/10 hover:text-primary dark:hover:bg-primary dark:hover:text-white focus:bg-primary/10 focus:text-primary dark:focus:bg-primary dark:focus:text-white transition-colors"
+                    onClick={() => {
+                      setAuthModalTab("signin");
+                      setAuthModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    Sign In
+                  </Button>
+                  <Button
+                    className="justify-start h-10 bg-linear-to-r from-primary to-accent hover:opacity-90 transition-opacity"
+                    onClick={() => {
+                      setAuthModalTab("signup");
+                      setAuthModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    Sign Up
+                  </Button>
                 </>
               )}
-            </Button>
-
-            {isAuthenticated ? (
-              <>
-                <Button variant="ghost" className="justify-start h-10" asChild>
-                  <Link href="/thread/new">
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Thread
-                  </Link>
-                </Button>
-                <Button variant="ghost" className="justify-start h-10" asChild>
-                  <Link href="/messages">
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Messages
-                  </Link>
-                </Button>
-                <Button variant="ghost" className="justify-start h-10" asChild>
-                  <Link href={`/user/${user?.id}`}>
-                    <User className="mr-2 h-4 w-4" />
-                    Profile
-                  </Link>
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="justify-start h-10 text-destructive hover:text-destructive"
-                  onClick={logout}
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  className="justify-start h-10"
-                  onClick={() => {
-                    setAuthModalTab("signin");
-                    setAuthModalOpen(true);
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  Sign In
-                </Button>
-                <Button
-                  className="justify-start h-10 bg-linear-to-r from-primary to-accent"
-                  onClick={() => {
-                    setAuthModalTab("signup");
-                    setAuthModalOpen(true);
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  Sign Up
-                </Button>
-              </>
-            )}
-          </nav>
-        </div>
+            </nav>
+          </div>
+        </>
       )}
     </header>
   );

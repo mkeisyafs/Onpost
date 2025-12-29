@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import useSWR from "swr";
 import forumsApi from "@/lib/forums-api";
+import type { ForumsUser } from "@/lib/types";
+import { EditProfileModal } from "./edit-profile-modal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,11 +29,13 @@ export function UserProfile({ userId }: UserProfileProps) {
   const { user: currentUser } = useAuth();
   const [userPosts, setUserPosts] = useState<ExtendedPost[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const {
     data: user,
     error,
     isLoading,
+    mutate,
   } = useSWR(["user", userId], () => forumsApi.users.get(userId), {
     revalidateOnFocus: false,
   });
@@ -122,6 +126,11 @@ export function UserProfile({ userId }: UserProfileProps) {
   const isOwnProfile = currentUser?.id === user.id;
   const trust = user.extendedData?.trust;
 
+  const handleProfileUpdated = (updatedUser: ForumsUser) => {
+    // Update the SWR cache with the new user data
+    mutate(updatedUser, false);
+  };
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       {/* Profile Header */}
@@ -149,7 +158,11 @@ export function UserProfile({ userId }: UserProfileProps) {
                   <p className="text-muted-foreground">@{user.username}</p>
                 </div>
                 {isOwnProfile ? (
-                  <Button variant="outline" size="sm">
+                  <Button
+                    size="sm"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
                     <Edit className="mr-1 h-4 w-4" />
                     Edit Profile
                   </Button>
@@ -162,6 +175,13 @@ export function UserProfile({ userId }: UserProfileProps) {
                   </Button>
                 )}
               </div>
+
+              {/* Bio */}
+              {user.bio && (
+                <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+                  {user.bio}
+                </p>
+              )}
 
               {/* Trust Badge & Join Date */}
               <div className="mt-4 flex flex-wrap items-center gap-4">
@@ -230,6 +250,16 @@ export function UserProfile({ userId }: UserProfileProps) {
           </Card>
         )}
       </div>
+
+      {/* Edit Profile Modal */}
+      {isOwnProfile && (
+        <EditProfileModal
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          user={user}
+          onProfileUpdated={handleProfileUpdated}
+        />
+      )}
     </div>
   );
 }

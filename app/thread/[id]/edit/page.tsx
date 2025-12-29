@@ -17,6 +17,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ImageCropper } from "@/components/ui/image-cropper";
 import { X, ImageIcon, Loader2, Save, Edit, User } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
 import { uploadImage, compressImage } from "@/lib/file-api";
@@ -49,6 +50,11 @@ export default function EditThreadPage() {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
 
+  // Image cropping state
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [cropType, setCropType] = useState<"cover" | "icon">("cover");
+
   useEffect(() => {
     async function fetchThread() {
       try {
@@ -79,9 +85,13 @@ export default function EditThreadPage() {
   const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      if (coverImage?.url && !coverImage.isExisting)
-        URL.revokeObjectURL(coverImage.url);
-      setCoverImage({ url: URL.createObjectURL(file), file });
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImageSrc(reader.result as string);
+        setCropType("cover");
+        setShowCropper(true);
+      };
+      reader.readAsDataURL(file);
     }
     if (coverInputRef.current) coverInputRef.current.value = "";
   };
@@ -89,10 +99,30 @@ export default function EditThreadPage() {
   const handleIconSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      if (icon?.url && !icon.isExisting) URL.revokeObjectURL(icon.url);
-      setIcon({ url: URL.createObjectURL(file), file });
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImageSrc(reader.result as string);
+        setCropType("icon");
+        setShowCropper(true);
+      };
+      reader.readAsDataURL(file);
     }
     if (iconInputRef.current) iconInputRef.current.value = "";
+  };
+
+  const handleCropComplete = (croppedImageUrl: string) => {
+    if (cropType === "cover") {
+      setCoverImage({ url: croppedImageUrl });
+    } else {
+      setIcon({ url: croppedImageUrl });
+    }
+    setShowCropper(false);
+    setCropImageSrc(null);
+  };
+
+  const handleCropCancel = () => {
+    setShowCropper(false);
+    setCropImageSrc(null);
   };
 
   // compressImage is now imported from file-api
@@ -340,7 +370,7 @@ export default function EditThreadPage() {
             )}
           </CardContent>
 
-          <CardFooter className="flex justify-between gap-4 pt-6 border-t">
+          <CardFooter className="flex justify-end gap-4 pt-6 border-t">
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               Cancel
             </Button>
@@ -365,6 +395,19 @@ export default function EditThreadPage() {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Image Cropper Modal */}
+      {cropImageSrc && (
+        <ImageCropper
+          open={showCropper}
+          onClose={handleCropCancel}
+          imageSrc={cropImageSrc}
+          onCropComplete={handleCropComplete}
+          aspectRatio={cropType === "cover" ? 3 / 1 : 1}
+          cropShape={cropType === "icon" ? "round" : "rect"}
+          title={cropType === "cover" ? "Crop Banner Image" : "Crop Icon"}
+        />
+      )}
     </div>
   );
 }
