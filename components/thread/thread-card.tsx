@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Eye, TrendingUp, ImageIcon, Clock } from "lucide-react";
 import type { ForumsThread } from "@/lib/types";
+import useSWR from "swr";
+import forumsApi from "@/lib/forums-api";
 
 interface ThreadCardProps {
   thread: ForumsThread;
@@ -77,7 +79,19 @@ export function ThreadCard({ thread }: ThreadCardProps) {
 
   const intent = detectIntent(thread.title, thread.body);
 
-  // Use thread data directly - no separate API call to prevent spam
+  // Fetch posts to get actual count (with error resilience)
+  const { data: postsData } = useSWR(
+    ["thread-posts-count", thread.id],
+    () => forumsApi.posts.list(thread.id, { limit: 1 }),
+    {
+      revalidateOnFocus: false,
+      // Don't spam retries on 500 errors
+      shouldRetryOnError: false,
+      errorRetryCount: 0,
+    }
+  );
+
+  // Use real data from thread or fetched data
   const viewCount = thread.viewCount || 0;
   const postCount = thread.postCount ?? 0;
 
@@ -185,7 +199,7 @@ export function ThreadCard({ thread }: ThreadCardProps) {
         {/* Tags & Stats with Micro-interactions */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {thread.tags?.slice(0, 2).map((tag) => {
-            const tagName = typeof tag === "string" ? tag : tag.name;
+            const label = typeof tag === "string" ? tag : tag.name;
             const tagKey = typeof tag === "string" ? tag : tag.id;
             return (
               <Badge
@@ -193,7 +207,7 @@ export function ThreadCard({ thread }: ThreadCardProps) {
                 variant="secondary"
                 className="text-xs px-2 py-0.5 rounded-full bg-muted/50"
               >
-                #{tagName}
+                #{label}
               </Badge>
             );
           })}

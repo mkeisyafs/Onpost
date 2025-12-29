@@ -110,11 +110,28 @@ export default function EditThreadPage() {
     if (iconInputRef.current) iconInputRef.current.value = "";
   };
 
-  const handleCropComplete = (croppedImageUrl: string) => {
-    if (cropType === "cover") {
-      setCoverImage({ url: croppedImageUrl });
-    } else {
-      setIcon({ url: croppedImageUrl });
+  const handleCropComplete = async (croppedImageUrl: string) => {
+    try {
+      // Convert data URL to File object for uploading
+      const response = await fetch(croppedImageUrl);
+      const blob = await response.blob();
+      const file = new File([blob], cropType === "cover" ? "cover.jpg" : "icon.jpg", {
+        type: "image/jpeg",
+      });
+
+      if (cropType === "cover") {
+        setCoverImage({ url: croppedImageUrl, file });
+      } else {
+        setIcon({ url: croppedImageUrl, file });
+      }
+    } catch (err) {
+      console.error("Failed to process cropped image:", err);
+      // Fallback: use the URL but file will be missing
+      if (cropType === "cover") {
+        setCoverImage({ url: croppedImageUrl });
+      } else {
+        setIcon({ url: croppedImageUrl });
+      }
     }
     setShowCropper(false);
     setCropImageSrc(null);

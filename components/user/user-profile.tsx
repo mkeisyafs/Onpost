@@ -8,18 +8,26 @@ import { EditProfileModal } from "./edit-profile-modal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrustBadge } from "./trust-badge";
 import { TrustDetails } from "./trust-details";
+import { UserListings } from "./user-listings";
+import { UserThreads } from "./user-threads";
 import { UserProfileSkeleton } from "./user-profile-skeleton";
-import {
-  FeedPostCard,
-  type ExtendedPost,
-} from "@/components/post/feed-post-card";
-import { Skeleton } from "@/components/ui/skeleton";
+
 import { useAuth } from "@/lib/auth-context";
 import { formatDistanceToNow } from "date-fns";
-import { MessageSquare, Calendar, Edit, FileText } from "lucide-react";
+import {
+  MessageSquare,
+  Calendar,
+  Edit,
+  ShoppingBag,
+  FileText,
+} from "lucide-react";
 import Link from "next/link";
+
+import { Skeleton } from "../ui/skeleton";
+import { FeedPostCard, type ExtendedPost } from "../post/feed-post-card";
 
 interface UserProfileProps {
   userId: string;
@@ -27,9 +35,10 @@ interface UserProfileProps {
 
 export function UserProfile({ userId }: UserProfileProps) {
   const { user: currentUser } = useAuth();
+  const [activeTab, setActiveTab] = useState("listings");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [userPosts, setUserPosts] = useState<ExtendedPost[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const {
     data: user,
@@ -39,68 +48,6 @@ export function UserProfile({ userId }: UserProfileProps) {
   } = useSWR(["user", userId], () => forumsApi.users.get(userId), {
     revalidateOnFocus: false,
   });
-
-  // Fetch user's posts
-  useEffect(() => {
-    const fetchUserPosts = async () => {
-      if (!user) return;
-
-      setIsLoadingPosts(true);
-      try {
-        // Fetch threads and then get posts from them, filtering by user
-        const threadsResponse = await forumsApi.threads.list({ limit: 20 });
-        const allPosts: ExtendedPost[] = [];
-
-        for (const thread of threadsResponse.threads || []) {
-          try {
-            const postsResponse = await forumsApi.posts.list(thread.id, {
-              limit: 50,
-            });
-            const allThreadPosts = postsResponse.posts || [];
-
-            const userPostsInThread = allThreadPosts
-              .filter(
-                (post) =>
-                  (post.authorId || post.userId) === userId &&
-                  !post.parentId &&
-                  !post.parentPostId
-              )
-              .map((post) => {
-                // Count replies to this post
-                const commentCount = allThreadPosts.filter(
-                  (p) => p.parentId === post.id || p.parentPostId === post.id
-                ).length;
-
-                return {
-                  ...post,
-                  _threadTitle: thread.title,
-                  _threadId: thread.id,
-                  _threadViewCount: thread.viewCount || 0,
-                  _commentCount: commentCount,
-                };
-              });
-            allPosts.push(...userPostsInThread);
-          } catch {
-            // Skip thread if posts fail to load
-          }
-        }
-
-        // Sort by createdAt descending
-        allPosts.sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-
-        setUserPosts(allPosts);
-      } catch (error) {
-        console.error("Failed to fetch user posts:", error);
-      } finally {
-        setIsLoadingPosts(false);
-      }
-    };
-
-    fetchUserPosts();
-  }, [user, userId]);
 
   if (isLoading) {
     return <UserProfileSkeleton />;

@@ -83,7 +83,7 @@ export function ThreadHeader({
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
       {/* Cover Image */}
-      <div className="relative aspect-[3/1] w-full overflow-visible bg-gradient-to-br from-primary/20 via-primary/10 to-muted">
+      <div className="relative aspect-3/1 w-full overflow-visible bg-linear-to-br from-primary/20 via-primary/10 to-muted">
         {/* Inner cover that clips ONLY the image */}
         <div className="absolute inset-0 overflow-hidden">
           {coverImage ? (
@@ -99,7 +99,7 @@ export function ThreadHeader({
           )}
 
           {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
         </div>
 
         {/* Thread Icon - now safe (not clipped) */}
@@ -112,7 +112,7 @@ export function ThreadHeader({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+              <div className="h-full w-full flex items-center justify-center bg-linear-to-br from-primary/20 to-primary/5">
                 <span className="text-2xl font-bold text-primary">
                   {thread.title.charAt(0).toUpperCase()}
                 </span>
@@ -150,6 +150,13 @@ export function ThreadHeader({
                       <Edit className="mr-2 h-4 w-4" />
                       Edit Thread
                     </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive cursor-pointer"
+                    onClick={() => setShowDeleteDialog(true)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Thread
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                 </>
@@ -212,11 +219,11 @@ export function ThreadHeader({
         {thread.tags && thread.tags.length > 0 && (
           <div className="mt-6 flex flex-wrap gap-2">
             {thread.tags.map((tag) => {
+              const tagId = typeof tag === "string" ? tag : tag.id;
               const tagName = typeof tag === "string" ? tag : tag.name;
-              const tagKey = typeof tag === "string" ? tag : tag.id;
               return (
                 <Badge
-                  key={tagKey}
+                  key={tagId}
                   variant="secondary"
                   className="rounded-full px-3 py-1"
                 >
@@ -226,6 +233,23 @@ export function ThreadHeader({
             })}
           </div>
         )}
+
+        {/* Bottom Actions */}
+        <div className="mt-6 pt-4 border-t border-border flex items-center gap-2">
+          {isOwner && (
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="rounded-full gap-2"
+            >
+              <Link href={`/thread/${thread.id}/edit`}>
+                <Edit className="h-4 w-4" />
+                Edit
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Delete Confirmation Dialog */}

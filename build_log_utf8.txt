@@ -1,0 +1,119 @@
+﻿
+> my-v0-project@0.1.0 build
+> next build
+
+   Γû▓ Next.js 16.0.10 (Turbopack)
+   - Environments: .env
+
+   Creating an optimized production build ...
+node.exe : 
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" "C:\Us
+ers\catur\AppData\Roaming\ 
+...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (:String  
+  ) [], RemoteException
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+> Build error occurred
+Error: Turbopack build 
+failed with 1 errors:
+./app/layout.tsx:8:1
+Export Header doesn't exist 
+in target module
+[0m [90m  6 |[39m 
+[36mimport[39m { 
+[33mAuthProvider[39m } 
+[36mfrom[39m [32m"@/lib/au
+th-context"[39m[33m;[39m
+ [90m  7 |[39m 
+[36mimport[39m { 
+[33mAuthModalProvider[39m 
+} [36mfrom[39m [32m"@/lib/
+auth-modal-context"[39m[33m
+;[39m
+[31m[1m>[22m[39m[90m  8 
+|[39m [36mimport[39m { 
+[33mHeader[39m } 
+[36mfrom[39m [32m"@/compon
+ents/layout/header"[39m[33m
+;[39m
+ [90m    |[39m [31m[1m^[
+22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^
+[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1
+m^[22m[39m[31m[1m^[22m[
+39m[31m[1m^[22m[39m[31m
+[1m^[22m[39m[31m[1m^[22m
+[39m[31m[1m^[22m[39m[31
+m[1m^[22m[39m[31m[1m^[2
+2m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^
+[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m
+^[22m[39m[31m[1m^[22m[3
+9m[31m[1m^[22m[39m[31m[
+1m^[22m[39m[31m[1m^[22m
+[39m[31m[1m^[22m[39m[31m
+[1m^[22m[39m[31m[1m^[22
+m[39m[31m[1m^[22m[39m[3
+1m[1m^[22m[39m[31m[1m^[
+22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^
+[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1
+m^[22m[39m[31m[1m^[22m[
+39m[31m[1m^[22m[39m[31m
+[1m^[22m[39m[31m[1m^[22m
+[39m[31m[1m^[22m[39m[31
+m[1m^[22m[39m[31m[1m^[2
+2m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^
+[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m
+^[22m[39m[31m[1m^[22m[3
+9m[31m[1m^[22m[39m[31m[
+1m^[22m[39m
+ [90m  9 |[39m 
+[36mimport[39m { 
+[33mSidebar[39m } 
+[36mfrom[39m [32m"@/compon
+ents/layout/sidebar"[39m[33
+m;[39m
+ [90m 10 |[39m 
+[36mimport[39m { 
+[33mMobileNavWrapper[39m } 
+[36mfrom[39m [32m"@/compon
+ents/layout/mobile-nav"[39m
+[33m;[39m
+ [90m 11 |[39m 
+[36mimport[39m { 
+[33mSkeleton[39m } 
+[36mfrom[39m [32m"@/compon
+ents/ui/skeleton"[39m[33m;
+[39m[0m
+
+The export Header was not 
+found in module [project]/com
+ponents/layout/header.tsx 
+[app-rsc] (ecmascript).
+The module has no exports at 
+all.
+All exports of the module 
+are statically known (It 
+doesn't have dynamic 
+exports). So it's known 
+statically that the 
+requested export doesn't 
+exist.
+
+
+    at <unknown> 
+(./app/layout.tsx:8:1)

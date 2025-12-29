@@ -9,7 +9,7 @@ import {
   type ExtendedPost,
 } from "@/components/post/feed-post-card";
 import type { ForumsPost } from "@/lib/types";
-import { RefreshCw, ArrowDown } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 interface HomeFeedProps {
   refreshKey?: number;
@@ -253,7 +253,7 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
         }}
       >
         {posts.map((post) => (
-          <FeedPostCard key={post.id} post={post} />
+          <FeedPostCard key={post.id} post={post as ExtendedPost} />
         ))}
       </div>
     </div>

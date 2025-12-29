@@ -38,20 +38,17 @@ import {
 } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
 import { uploadImage, compressImage } from "@/lib/file-api";
-import { useAuthModal } from "@/lib/auth-modal-context";
 import Link from "next/link";
 import type { Tag, ThreadExtendedData } from "@/lib/types";
 
 export default function NewThreadPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading, user } = useAuth();
-  const { openAuthModal } = useAuthModal();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [enableMarket, setEnableMarket] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverImage, setCoverImage] = useState<{
     url: string;
@@ -147,17 +144,38 @@ export default function NewThreadPage() {
     if (iconInputRef.current) iconInputRef.current.value = "";
   };
 
-  const handleCropComplete = (croppedImageUrl: string) => {
-    if (cropType === "cover") {
-      if (coverImage?.url && !coverImage.url.startsWith("data:")) {
-        URL.revokeObjectURL(coverImage.url);
+  const handleCropComplete = async (croppedImageUrl: string) => {
+    try {
+      // Convert data URL to File object for uploading
+      const response = await fetch(croppedImageUrl);
+      const blob = await response.blob();
+      const file = new File(
+        [blob],
+        cropType === "cover" ? "cover.jpg" : "icon.jpg",
+        {
+          type: "image/jpeg",
+        }
+      );
+
+      if (cropType === "cover") {
+        if (coverImage?.url && !coverImage.url.startsWith("data:")) {
+          URL.revokeObjectURL(coverImage.url);
+        }
+        setCoverImage({ url: croppedImageUrl, file });
+      } else {
+        if (icon?.url && !icon.url.startsWith("data:")) {
+          URL.revokeObjectURL(icon.url);
+        }
+        setIcon({ url: croppedImageUrl, file });
       }
-      setCoverImage({ url: croppedImageUrl });
-    } else {
-      if (icon?.url && !icon.url.startsWith("data:")) {
-        URL.revokeObjectURL(icon.url);
+    } catch (err) {
+      console.error("Failed to process cropped image:", err);
+      // Fallback: use the URL but file will be missing
+      if (cropType === "cover") {
+        setCoverImage({ url: croppedImageUrl });
+      } else {
+        setIcon({ url: croppedImageUrl });
       }
-      setIcon({ url: croppedImageUrl });
     }
     setShowCropper(false);
     setCropImageSrc(null);
@@ -193,12 +211,8 @@ export default function NewThreadPage() {
             <p className="text-muted-foreground mb-6">
               Please sign in to create a new thread.
             </p>
-            <Button
-              size="lg"
-              className="rounded-full px-8"
-              onClick={() => openAuthModal("signin")}
-            >
-              Sign In
+            <Button asChild size="lg" className="rounded-full px-8">
+              <Link href="/login">Sign In</Link>
             </Button>
           </CardContent>
         </Card>
@@ -256,7 +270,6 @@ export default function NewThreadPage() {
 
       // Upload images to file server
       if (coverImage?.file || icon?.file) {
-        setIsUploadingImages(true);
         try {
           if (coverImage?.file) {
             const compressed = await compressImage(coverImage.file, 800, 0.8);
@@ -271,7 +284,6 @@ export default function NewThreadPage() {
         } catch (uploadErr) {
           console.error("Failed to upload images:", uploadErr);
         }
-        setIsUploadingImages(false);
       }
 
       // Simplified market data - market type derived from thread category
