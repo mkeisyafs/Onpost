@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ForumsPrivateMessage } from "@/lib/types";
+import { uploadImage, compressImage } from "@/lib/file-api";
 
 interface ConversationUser {
   id: string;
@@ -251,29 +252,37 @@ export default function MessagesPage() {
     )
       return;
 
+
+
     // Build message body with image if present
     let finalBody = messageBody.trim();
-    let imageDataUrl = "";
+    let imageUrl = "";
 
     if (selectedImageFile) {
-      // Convert image to base64 data URL for display
-      const reader = new FileReader();
-      imageDataUrl = await new Promise<string>((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(selectedImageFile);
-      });
+      try {
+        // Compress and upload image
+        const compressed = await compressImage(selectedImageFile, 800, 0.7);
+        const result = await uploadImage(compressed);
+        if (result.success) {
+          imageUrl = result.url;
+        }
+      } catch (err) {
+        console.error("Failed to upload image:", err);
+        setIsSending(false);
+        return; // Stop if upload fails
+      }
     }
 
     const tempMessage: ForumsPrivateMessage = {
       id: `pending-${Date.now()}`,
       title: "Chat",
-      body: finalBody || (imageDataUrl ? "📷 Image" : ""),
+      body: finalBody || (imageUrl ? "📷 Image" : ""),
       senderId: user.id,
       recipientId: selectedConversation.user.id,
       read: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      extendedData: imageDataUrl ? { imageUrl: imageDataUrl } : undefined,
+      extendedData: imageUrl ? { imageUrl: imageUrl } : undefined,
     };
 
     // Add to pending immediately
@@ -286,9 +295,9 @@ export default function MessagesPage() {
       // Send message with extendedData for image
       await forumsApi.messages.send({
         title: `Chat`,
-        body: finalBody || (imageDataUrl ? "📷 Image" : ""),
+        body: finalBody || (imageUrl ? "📷 Image" : ""),
         recipientId: selectedConversation.user.id,
-        extendedData: imageDataUrl ? { imageUrl: imageDataUrl } : undefined,
+        extendedData: imageUrl ? { imageUrl: imageUrl } : undefined,
       });
 
       console.log("Message sent successfully");

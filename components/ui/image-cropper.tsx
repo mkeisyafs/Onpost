@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import type { Area, Point } from "react-easy-crop";
 import {
@@ -133,15 +133,21 @@ export function ImageCropper({
   onClose,
   imageSrc,
   onCropComplete,
-  aspectRatio = 1,
+  aspectRatio,
   cropShape = "rect",
   title = "Crop Image",
 }: ImageCropperProps) {
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  // Update current aspect when prop changes
+  const [currentAspect, setCurrentAspect] = useState<number | undefined>(aspectRatio);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    setCurrentAspect(aspectRatio);
+  }, [aspectRatio]);
 
   const onCropChange = useCallback((location: Point) => {
     setCrop(location);
@@ -209,7 +215,7 @@ export function ImageCropper({
             crop={crop}
             zoom={zoom}
             rotation={rotation}
-            aspect={aspectRatio}
+            aspect={currentAspect}
             cropShape={cropShape}
             onCropChange={onCropChange}
             onZoomChange={onZoomChange}
@@ -220,6 +226,44 @@ export function ImageCropper({
 
         {/* Controls */}
         <div className="px-6 py-4 space-y-4 border-t bg-muted/30">
+          {/* Aspect Ratio Controls */}
+          {cropShape === "rect" && (
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant={currentAspect === undefined ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentAspect(undefined)}
+                className="h-8"
+              >
+                Free
+              </Button>
+              <Button
+                variant={currentAspect === 1 ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentAspect(1)}
+                className="h-8"
+              >
+                1:1
+              </Button>
+              <Button
+                variant={currentAspect === 16 / 9 ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentAspect(16 / 9)}
+                className="h-8"
+              >
+                16:9
+              </Button>
+              <Button
+                variant={currentAspect === 9 / 16 ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentAspect(9 / 16)}
+                className="h-8"
+              >
+                9:16
+              </Button>
+            </div>
+          )}
+
           {/* Zoom Control */}
           <div className="flex items-center gap-4">
             <ZoomOut className="h-4 w-4 text-muted-foreground" />

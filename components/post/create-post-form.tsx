@@ -58,7 +58,7 @@ export function CreatePostForm({
     }
   }, [body]);
 
-  const MAX_IMAGES = 4;
+  const MAX_IMAGES = 50;
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -173,11 +173,8 @@ export function CreatePostForm({
 
       setIsUploading(false);
 
-      // Build post body - include image placeholders if any
-      if (uploadedImageUrls.length > 0) {
-        postBody +=
-          "\n\n" + uploadedImageUrls.map((_, i) => `[Image ${i + 1}]`).join(" ");
-      }
+      // Build post body
+      // We no longer append [Image X] placeholders as we use extendedData.images
 
       const extendedData: Record<string, any> = {};
       if (detectedTrade) {
@@ -292,19 +289,27 @@ export function CreatePostForm({
 
           {/* Image Previews */}
           {images.length > 0 && (
-            <div className="flex flex-wrap gap-2 p-3 pt-0">
+            <div 
+              className={cn(
+                "grid grid-cols-3 sm:grid-cols-4 gap-2 p-3 pt-0",
+                images.length > 4 && "max-h-[320px] overflow-y-auto pr-2"
+              )}
+            >
               {images.map((img, idx) => (
-                <div key={idx} className="relative group animate-in fade-in zoom-in-95 duration-200">
-                  <div className="h-20 w-20 overflow-hidden rounded-lg border border-border shadow-sm">
+                <div key={idx} className="relative aspect-square group animate-in fade-in zoom-in-95 duration-200">
+                  <div className="h-full w-full overflow-hidden rounded-lg border border-border shadow-sm">
                     <img src={img.url} alt="" className="h-full w-full object-cover" />
                   </div>
                   <button
                     type="button"
                     onClick={() => removeImage(idx)}
-                    className="absolute -top-1.5 -right-1.5 rounded-full bg-destructive p-0.5 text-white shadow-md hover:bg-destructive/90 transition-transform hover:scale-110 active:scale-90"
+                    className="absolute -top-1.5 -right-1.5 z-10 rounded-full bg-destructive p-0.5 text-white shadow-md hover:bg-destructive/90 transition-transform hover:scale-110 active:scale-90"
                   >
                     <X className="h-3 w-3" />
                   </button>
+                  <div className="absolute bottom-1 right-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-[2px]">
+                    {idx + 1}
+                  </div>
                 </div>
               ))}
             </div>
@@ -314,7 +319,7 @@ export function CreatePostForm({
           <div className="flex items-center justify-between border-t border-border/10 px-3 py-2 bg-muted/50">
             <div className="flex items-center gap-1">
               <input
-                type="input"
+                type="file"
                 ref={fileInputRef}
                 onChange={handleImageSelect}
                 accept="image/*"
@@ -385,7 +390,7 @@ export function CreatePostForm({
             setPendingImages([]);
             setCurrentCropIndex(0);
           }}
-          aspectRatio={4 / 3}
+          aspectRatio={undefined}
           title={`Crop image ${currentCropIndex + 1} of ${pendingImages.length}`}
         />
       )}
