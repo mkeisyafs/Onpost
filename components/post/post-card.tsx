@@ -53,6 +53,7 @@ import forumsApi from "@/lib/forums-api";
 import { uploadImage, compressImage } from "@/lib/file-api";
 import type { ForumsPost } from "@/lib/types";
 import { CommentModal } from "./comment-modal";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { cn } from "@/lib/utils";
 
 interface PostCardProps {
@@ -534,7 +535,13 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
         open={!!lightboxImage}
         onOpenChange={() => setLightboxImage(null)}
       >
-        <DialogContent className="max-h-[90vh] max-w-[90vw] border-0 bg-transparent p-0 shadow-none">
+        <DialogContent
+          className="max-h-[90vh] max-w-[90vw] border-0 bg-transparent p-0 shadow-none"
+          showCloseButton={false}
+        >
+          <VisuallyHidden>
+            <DialogTitle>Image Preview</DialogTitle>
+          </VisuallyHidden>
           <button
             onClick={() => setLightboxImage(null)}
             className="absolute -right-2 -top-2 z-10 rounded-full bg-black/80 p-2 text-white hover:bg-black transition-colors"

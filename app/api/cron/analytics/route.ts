@@ -536,7 +536,7 @@ function hasHighLikelihoodTradePattern(body: string): boolean {
   const HIGH_LIKELIHOOD_PATTERN =
     /\b(WTS|WTB|WTT|SELL|BUY|JUAL|BELI|DIJUAL|CARI|S>|B>|T>)\b/i;
   const PRICE_INDICATOR_PATTERN =
-    /(\d+(?:[.,]\d+)?)\s*(k|rb|ribu|jt|juta|m|million|\$|usd|rp)/i;
+    /(\$\s*\d+|(\d+(?:[.,]\d+)?)\s*(k|rb|ribu|jt|juta|m|million|usd|rp))/i;
   return (
     HIGH_LIKELIHOOD_PATTERN.test(body) && PRICE_INDICATOR_PATTERN.test(body)
   );
@@ -579,6 +579,23 @@ function parsePrice(body: string): {
   confidence: number;
 } {
   const PRICE_PATTERNS = [
+    // USD patterns - prioritize $ symbol
+    {
+      regex: /\$\s*(\d+(?:[.,]\d{2})?)(?:\s|$)/i,
+      multiplier: 1,
+      currency: "USD",
+    },
+    {
+      regex: /(?:take\s*all|all\s*for?)?\s*\$\s*(\d+(?:[.,]\d{2})?)/i,
+      multiplier: 1,
+      currency: "USD",
+    },
+    {
+      regex: /(\d+(?:[.,]\d{2})?)\s*(?:usd|dollar|dollars)/i,
+      multiplier: 1,
+      currency: "USD",
+    },
+    // IDR patterns
     {
       regex: /(\d+(?:[.,]\d+)?)\s*(jt|juta)/i,
       multiplier: 1_000_000,
@@ -590,12 +607,6 @@ function parsePrice(body: string): {
       currency: "IDR",
     },
     { regex: /(\d+(?:[.,]\d+)?)\s*k\b/i, multiplier: 1_000, currency: "IDR" },
-    { regex: /\$\s*(\d+(?:[.,]\d+)?)/i, multiplier: 1, currency: "USD" },
-    {
-      regex: /(\d+(?:[.,]\d+)?)\s*(usd|dollar)/i,
-      multiplier: 1,
-      currency: "USD",
-    },
   ];
 
   for (const { regex, multiplier, currency } of PRICE_PATTERNS) {

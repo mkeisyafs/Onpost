@@ -265,9 +265,10 @@ export function AIMarketAssistant() {
                 <p className="text-xs text-muted-foreground">Try asking:</p>
                 <div className="space-y-2">
                   {[
-                    "Find the cheapest Uma Musume account",
-                    "Analyze price range for Genshin accounts",
-                    "Show WTB requests for Mobile Legends",
+                    "Find the cheapest Nike shoes",
+                    "Cari sepatu New Balance",
+                    "Show iPhone listings",
+                    "Analyze Genshin account prices",
                   ].map((suggestion) => (
                     <button
                       key={suggestion}
@@ -282,10 +283,15 @@ export function AIMarketAssistant() {
                 {/* Quick tags */}
                 <div className="pt-3 border-t border-border/50">
                   <p className="text-xs text-muted-foreground mb-2">
-                    Popular games:
+                    Popular categories:
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {KNOWN_GAME_TAGS.slice(0, 4).map((tag) => (
+                    {[
+                      { value: "shoes", label: "Shoes" },
+                      { value: "electronics", label: "Electronics" },
+                      { value: "genshin-impact", label: "Genshin" },
+                      { value: "mobile-legends", label: "ML" },
+                    ].map((tag) => (
                       <Badge
                         key={tag.value}
                         variant="outline"

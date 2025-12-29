@@ -7,6 +7,7 @@ import {
   postToListing,
   formatPrice,
   getPostPrice,
+  extractSearchKeywords,
   KNOWN_GAME_TAGS,
   type AssistantResponse,
   type ParsedQuery,
@@ -69,20 +70,33 @@ async function fetchForumsApi<T>(endpoint: string): Promise<T> {
 // ============================================
 
 async function fetchPosts(
-  tag: string,
-  tradeIntent: "WTS" | "WTB" | null
+  tag: string | null,
+  tradeIntent: "WTS" | "WTB" | null,
+  rawQuery?: string
 ): Promise<{ posts: ForumsPost[]; scanned: number }> {
   const allPosts: ForumsPost[] = [];
   let scanned = 0;
 
-  // Convert tag to search query (uma-musume -> uma musume)
-  const tagName = tag.replace(/-/g, " ");
+  // Build search query - use tag if available, otherwise extract keywords from raw query
+  let searchQuery = "";
+  if (tag) {
+    searchQuery = tag.replace(/-/g, " ");
+  } else if (rawQuery) {
+    const keywords = extractSearchKeywords(rawQuery);
+    searchQuery = keywords.join(" ");
+  }
+
+  if (!searchQuery) {
+    return { posts: [], scanned: 0 };
+  }
 
   try {
-    // Step 1: Find threads that match the game tag
+    // Step 1: Find threads that match the search query
     const threadsResult = await fetchForumsApi<{
       threads: Array<{ id: string; title: string }>;
-    }>(`/threads?query=${encodeURIComponent(tagName)}&filter=newest&limit=10`);
+    }>(
+      `/threads?query=${encodeURIComponent(searchQuery)}&filter=newest&limit=10`
+    );
 
     if (threadsResult.threads && threadsResult.threads.length > 0) {
       // Step 2: Fetch posts from matching threads
@@ -110,10 +124,10 @@ async function fetchPosts(
 
   // Fallback: Search posts directly if thread search returns empty
   try {
-    const searchQuery = [tagName, tradeIntent].filter(Boolean).join(" ");
+    const fullQuery = [searchQuery, tradeIntent].filter(Boolean).join(" ");
 
     const searchResult = await fetchForumsApi<PostsResponse>(
-      `/posts?query=${encodeURIComponent(searchQuery)}&filter=newest&limit=50`
+      `/posts?query=${encodeURIComponent(fullQuery)}&filter=newest&limit=50`
     );
 
     if (searchResult.posts && searchResult.posts.length > 0) {
@@ -313,15 +327,17 @@ export async function POST(request: NextRequest) {
     if (parsed.intent === "CLARIFICATION") {
       return NextResponse.json({
         type: "CLARIFICATION",
-        message: "Which game are you looking for?",
-        options: KNOWN_GAME_TAGS.map((t) => t.label),
+        message:
+          "What are you looking for? Try 'find shoes' or 'cheapest genshin account'",
+        options: KNOWN_GAME_TAGS.slice(0, 8).map((t) => t.label),
       } as AssistantResponse);
     }
 
-    // Fetch posts from matching threads
+    // Fetch posts from matching threads (use tag or raw query keywords)
     const { posts, scanned } = await fetchPosts(
-      parsed.tag!,
-      parsed.tradeIntent
+      parsed.tag,
+      parsed.tradeIntent,
+      parsed.rawQuery
     );
 
     // Filter trade posts - show all trade posts from matching threads
