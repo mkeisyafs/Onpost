@@ -33,8 +33,8 @@ import type {
 import { CommentModal } from "@/components/post/comment-modal";
 import forumsApi from "@/lib/forums-api";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import type { ForumsPost } from "@/lib/types";
-import Link from "next/link";
 
 // ============================================
 // Types
@@ -65,6 +65,7 @@ export function AIMarketAssistant() {
   const [isLoadingPost, setIsLoadingPost] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
 
   // Load messages from localStorage on mount
   useEffect(() => {
@@ -340,12 +341,12 @@ export function AIMarketAssistant() {
               <p className="text-sm text-muted-foreground mb-2">
                 Sign in to use AI Assistant
               </p>
-              <Link
-                href="/login"
+              <button
+                onClick={() => openAuthModal("signin")}
                 className="text-sm text-primary hover:underline font-medium"
               >
                 Sign In →
-              </Link>
+              </button>
             </div>
           )}
         </CardContent>

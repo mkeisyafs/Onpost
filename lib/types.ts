@@ -66,9 +66,12 @@ export interface ForumsPrivateMessage {
   sender?: ForumsUser;
   recipientId: string;
   recipient?: ForumsUser;
-  parentMessageId: string | null;
-  isRead: boolean;
+  parentMessageId?: string | null;
+  // API may return either 'read' or 'isRead'
+  read?: boolean;
+  isRead?: boolean;
   createdAt: string;
+  updatedAt?: string;
   extendedData?: PMExtendedData;
 }
 
@@ -216,6 +219,7 @@ export interface UserExtendedData {
 export interface PMExtendedData {
   linkedPostId?: string;
   linkedThreadId?: string;
+  imageUrl?: string; // Support for image attachments
 }
 
 // ============================================
@@ -241,7 +245,7 @@ export interface PostsResponse {
 }
 
 export interface MessagesResponse {
-  messages: ForumsPrivateMessage[];
+  privateMessages: ForumsPrivateMessage[];
   nextMessageCursor: string | null;
 }
 

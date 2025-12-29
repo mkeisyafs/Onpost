@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import forumsApi from "@/lib/forums-api";
 import type { ForumsPost, ForumsUser } from "@/lib/types";
 import Link from "next/link";
@@ -56,6 +57,7 @@ export function CommentModal({
   onUpdate,
 }: CommentModalProps) {
   const { user, isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
   const [comments, setComments] = useState<Comment[]>([]);
   const [replies, setReplies] = useState<Record<string, Comment[]>>({});
   const [loading, setLoading] = useState(false);
@@ -567,9 +569,12 @@ export function CommentModal({
             </div>
           ) : (
             <div className="text-center py-2">
-              <Link href="/login" className="text-primary hover:underline">
+              <button
+                onClick={() => openAuthModal("signin")}
+                className="text-primary hover:underline"
+              >
                 Sign in to comment
-              </Link>
+              </button>
             </div>
           )}
         </div>

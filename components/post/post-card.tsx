@@ -489,19 +489,12 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
                       </span>
                     )}
                   </div>
-                  {((post as unknown as { commentCount?: number })
-                    .commentCount ?? 0) > 0 && (
-                    <button
-                      onClick={() => setShowCommentModal(true)}
-                      className="hover:underline"
-                    >
-                      {
-                        (post as unknown as { commentCount?: number })
-                          .commentCount
-                      }{" "}
-                      komentar
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {replies.length}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Action buttons row */}

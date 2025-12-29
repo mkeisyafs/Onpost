@@ -1,66 +1,76 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect, Suspense } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import useSWR from "swr"
-import { useAuth } from "@/lib/auth-context"
-import forumsApi from "@/lib/forums-api"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Send, ArrowLeft } from "lucide-react"
-import Link from "next/link"
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import useSWR from "swr";
+import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
+import forumsApi from "@/lib/forums-api";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Send, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 function ComposePageContent() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { openAuthModal } = useAuthModal();
 
-  const recipientId = searchParams.get("recipientId")
-  const linkedPostId = searchParams.get("linkedPostId")
-  const subject = searchParams.get("subject")
+  const recipientId = searchParams.get("recipientId");
+  const linkedPostId = searchParams.get("linkedPostId");
+  const subject = searchParams.get("subject");
 
-  const [recipientUsername, setRecipientUsername] = useState("")
-  const [title, setTitle] = useState(subject || "")
-  const [body, setBody] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [recipientUsername, setRecipientUsername] = useState("");
+  const [title, setTitle] = useState(subject || "");
+  const [body, setBody] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch recipient if ID provided
-  const { data: recipient } = useSWR(recipientId ? ["user", recipientId] : null, () =>
-    forumsApi.users.get(recipientId!),
-  )
+  const { data: recipient } = useSWR(
+    recipientId ? ["user", recipientId] : null,
+    () => forumsApi.users.get(recipientId!)
+  );
 
   // Fetch linked post if provided
-  const { data: linkedPost } = useSWR(linkedPostId ? ["post", linkedPostId] : null, () =>
-    forumsApi.posts.get(linkedPostId!),
-  )
+  const { data: linkedPost } = useSWR(
+    linkedPostId ? ["post", linkedPostId] : null,
+    () => forumsApi.posts.get(linkedPostId!)
+  );
 
   useEffect(() => {
     if (recipient) {
-      setRecipientUsername(recipient.username)
+      setRecipientUsername(recipient.username);
     }
-  }, [recipient])
+  }, [recipient]);
 
   useEffect(() => {
     if (linkedPost) {
-      const trade = linkedPost.extendedData?.trade
+      const trade = linkedPost.extendedData?.trade;
       if (trade) {
         setBody(
           `Hi, I'm interested in your listing:\n\n` +
             `Price: ${trade.displayPrice || "Negotiable"}\n` +
             `---\n\n` +
-            `[Your message here]`,
-        )
+            `[Your message here]`
+        );
       }
     }
-  }, [linkedPost])
+  }, [linkedPost]);
 
   if (authLoading) {
     return (
@@ -71,7 +81,7 @@ function ComposePageContent() {
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   if (!isAuthenticated) {
@@ -79,29 +89,33 @@ function ComposePageContent() {
       <div className="mx-auto max-w-2xl px-4 py-8">
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">Please sign in to send messages.</p>
-            <Button asChild className="mt-4">
-              <Link href="/login">Sign In</Link>
+            <p className="text-muted-foreground">
+              Please sign in to send messages.
+            </p>
+            <Button className="mt-4" onClick={() => openAuthModal("signin")}>
+              Sign In
             </Button>
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!recipientUsername.trim() || !title.trim() || !body.trim()) return
+    e.preventDefault();
+    if (!recipientUsername.trim() || !title.trim() || !body.trim()) return;
 
-    setIsSubmitting(true)
-    setError(null)
+    setIsSubmitting(true);
+    setError(null);
 
     try {
       // Look up recipient by username if we don't have ID
-      let finalRecipientId = recipientId
+      let finalRecipientId = recipientId;
       if (!finalRecipientId) {
-        const user = await forumsApi.users.getByUsername(recipientUsername.trim())
-        finalRecipientId = user.id
+        const user = await forumsApi.users.getByUsername(
+          recipientUsername.trim()
+        );
+        finalRecipientId = user.id;
       }
 
       await forumsApi.messages.send({
@@ -109,15 +123,15 @@ function ComposePageContent() {
         body: body.trim(),
         recipientId: finalRecipientId,
         extendedData: linkedPostId ? { linkedPostId } : undefined,
-      })
+      });
 
-      router.push("/messages")
+      router.push("/messages");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send message")
+      setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -141,11 +155,17 @@ function ComposePageContent() {
                 <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary/50 p-3">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={recipient.avatarUrl || undefined} />
-                    <AvatarFallback>{recipient.displayName?.charAt(0).toUpperCase()}</AvatarFallback>
+                    <AvatarFallback>
+                      {recipient.displayName?.charAt(0).toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium text-foreground">{recipient.displayName}</p>
-                    <p className="text-sm text-muted-foreground">@{recipient.username}</p>
+                    <p className="font-medium text-foreground">
+                      {recipient.displayName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      @{recipient.username}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -187,8 +207,12 @@ function ComposePageContent() {
             {/* Linked Post Info */}
             {linkedPost && (
               <div className="rounded-lg border border-border bg-secondary/50 p-3">
-                <p className="text-xs text-muted-foreground">Linked to listing:</p>
-                <p className="mt-1 text-sm text-foreground line-clamp-2">{linkedPost.body}</p>
+                <p className="text-xs text-muted-foreground">
+                  Linked to listing:
+                </p>
+                <p className="mt-1 text-sm text-foreground line-clamp-2">
+                  {linkedPost.body}
+                </p>
               </div>
             )}
 
@@ -202,7 +226,15 @@ function ComposePageContent() {
             <Button type="button" variant="outline" asChild>
               <Link href="/messages">Cancel</Link>
             </Button>
-            <Button type="submit" disabled={isSubmitting || !recipientUsername.trim() || !title.trim() || !body.trim()}>
+            <Button
+              type="submit"
+              disabled={
+                isSubmitting ||
+                !recipientUsername.trim() ||
+                !title.trim() ||
+                !body.trim()
+              }
+            >
               <Send className="mr-1 h-4 w-4" />
               {isSubmitting ? "Sending..." : "Send Message"}
             </Button>
@@ -210,7 +242,7 @@ function ComposePageContent() {
         </form>
       </Card>
     </div>
-  )
+  );
 }
 
 export default function ComposePage() {
@@ -228,5 +260,5 @@ export default function ComposePage() {
     >
       <ComposePageContent />
     </Suspense>
-  )
+  );
 }

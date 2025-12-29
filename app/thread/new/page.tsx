@@ -35,12 +35,14 @@ import {
   User,
 } from "lucide-react";
 import forumsApi from "@/lib/forums-api";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import Link from "next/link";
 import type { ThreadMarketData, Tag, ThreadExtendedData } from "@/lib/types";
 
 export default function NewThreadPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading, user } = useAuth();
+  const { openAuthModal } = useAuthModal();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
@@ -191,8 +193,12 @@ export default function NewThreadPage() {
             <p className="text-muted-foreground mb-6">
               Please sign in to create a new thread.
             </p>
-            <Button asChild size="lg" className="rounded-full px-8">
-              <Link href="/login">Sign In</Link>
+            <Button
+              size="lg"
+              className="rounded-full px-8"
+              onClick={() => openAuthModal("signin")}
+            >
+              Sign In
             </Button>
           </CardContent>
         </Card>

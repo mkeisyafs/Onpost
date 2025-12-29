@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, X, ChevronUp, Image, Smile } from "lucide-react";
 import Link from "next/link";
+import { useAuthModal } from "@/lib/auth-modal-context";
 
 interface ThreadViewProps {
   threadId: string;
@@ -33,6 +34,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
   const [showPostForm, setShowPostForm] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const { isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
 
   const {
     data: thread,
@@ -225,13 +227,11 @@ export function ThreadView({ threadId }: ThreadViewProps) {
         {/* Login Prompt FAB */}
         {!isAuthenticated && (
           <Button
-            asChild
+            onClick={() => openAuthModal("signin")}
             size="icon"
             className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90"
           >
-            <Link href="/login">
-              <Plus className="h-6 w-6" />
-            </Link>
+            <Plus className="h-6 w-6" />
           </Button>
         )}
       </div>

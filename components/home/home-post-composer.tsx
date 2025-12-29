@@ -10,8 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ImageIcon, X, Send, DollarSign } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal-context";
 import forumsApi from "@/lib/forums-api";
-import Link from "next/link";
 
 // Available tags for selection
 const GAME_TAGS = [
@@ -40,6 +40,7 @@ interface HomePostComposerProps {
 
 export function HomePostComposer({ onPostCreated }: HomePostComposerProps) {
   const { user, isAuthenticated } = useAuth();
+  const { openAuthModal } = useAuthModal();
   const [body, setBody] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -204,12 +205,10 @@ export function HomePostComposer({ onPostCreated }: HomePostComposerProps) {
         <CardContent className="py-6 text-center">
           <p className="text-muted-foreground mb-3">Join the conversation!</p>
           <div className="flex gap-2 justify-center">
-            <Button variant="outline" asChild>
-              <Link href="/login">Sign In</Link>
+            <Button variant="outline" onClick={() => openAuthModal("signin")}>
+              Sign In
             </Button>
-            <Button asChild>
-              <Link href="/register">Sign Up</Link>
-            </Button>
+            <Button onClick={() => openAuthModal("signup")}>Sign Up</Button>
           </div>
         </CardContent>
       </Card>

@@ -263,9 +263,7 @@ export const posts = {
     await request(`/post/${id}`, { method: "DELETE" });
   },
 
-  async getLikes(
-    id: string
-  ): Promise<{
+  async getLikes(id: string): Promise<{
     likes: Array<{
       userId: string;
       user?: { id: string; displayName: string };
@@ -349,6 +347,17 @@ export const users = {
       `/user/${userId}/threads${query ? `?${query}` : ""}`
     );
   },
+
+  async search(query: string): Promise<{ users: ForumsUser[] }> {
+    const searchParams = new URLSearchParams();
+    if (query) searchParams.set("q", query);
+    searchParams.set("limit", "20");
+
+    const queryString = searchParams.toString();
+    return request<{ users: ForumsUser[] }>(
+      `/users/search${queryString ? `?${queryString}` : ""}`
+    );
+  },
 };
 
 // ============================================
@@ -385,7 +394,11 @@ export const messages = {
     body: string;
     recipientId: string;
     parentMessageId?: string;
-    extendedData?: { linkedPostId?: string; linkedThreadId?: string };
+    extendedData?: {
+      linkedPostId?: string;
+      linkedThreadId?: string;
+      imageUrl?: string; // Support for image attachments
+    };
   }): Promise<ForumsPrivateMessage> {
     return request<ForumsPrivateMessage>("/private-message", {
       method: "POST",
