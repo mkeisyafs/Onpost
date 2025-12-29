@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { getUserAvatarUrl } from "@/lib/utils";
+import { NotificationsPopover } from "@/components/layout/notifications-popover";
 
 export function Header() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -111,6 +113,8 @@ export function Header() {
 
           {isAuthenticated ? (
             <>
+              <NotificationsPopover />
+              
               <Button variant="ghost" size="icon" asChild className="h-9 w-9">
                 <Link href="/messages">
                   <MessageSquare className="h-4 w-4" />
@@ -127,7 +131,7 @@ export function Header() {
                   >
                     <Avatar className="h-7 w-7">
                       <AvatarImage
-                        src={user?.avatarUrl || undefined}
+                        src={getUserAvatarUrl(user)}
                         alt={user?.displayName}
                       />
                       <AvatarFallback className="bg-linear-to-br from-primary to-accent text-primary-foreground text-sm">
@@ -194,6 +198,13 @@ export function Header() {
             </>
           )}
         </div>
+
+        {/* Mobile Notifications - visible only when authenticated */}
+        {isAuthenticated && (
+          <div className="md:hidden shrink-0">
+             <NotificationsPopover />
+          </div>
+        )}
 
         {/* Mobile Menu Button */}
         <Button

@@ -77,6 +77,22 @@ export interface ForumsPrivateMessage {
   extendedData?: PMExtendedData;
 }
 
+export interface ForumsNotification {
+  id: string;
+  userId: string;
+  type: "MENTION" | "REPLY" | "THREAD_REPLY" | "LIKE" | "SYSTEM";
+  read: boolean;
+  data?: {
+    threadId?: string;
+    postId?: string;
+    notifierId?: string;
+    notifier?: ForumsUser;
+    preview?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ForumsCategory {
   id: string;
   name: string;
@@ -217,6 +233,7 @@ export interface UserTrustData {
 
 export interface UserExtendedData {
   trust?: UserTrustData;
+  profilePhoto?: string;
 }
 
 // PM Extended Data

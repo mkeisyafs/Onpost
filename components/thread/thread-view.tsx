@@ -256,6 +256,7 @@ export function ThreadView({ threadId }: ThreadViewProps) {
             <CreatePostForm
               threadId={threadId}
               onPostCreated={handlePostCreated}
+              threadAuthorId={thread?.authorId || thread?.userId}
             />
           </div>
         </DialogContent>

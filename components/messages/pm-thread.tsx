@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Send, Trash } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, getUserAvatarUrl } from "@/lib/utils"
 import Link from "next/link"
 
 interface PMThreadProps {
@@ -138,12 +138,12 @@ export function PMThread({ messageId, onReply }: PMThreadProps) {
       <CardContent className="flex-1 space-y-4 overflow-y-auto p-4">
         {allMessages.map((msg) => {
           const isOwn = msg.senderId === user?.id
-          const sender = isOwn ? user : otherUser
+          const sender = isOwn && user ? user : msg.sender
 
           return (
             <div key={msg.id} className={cn("flex gap-3", isOwn && "flex-row-reverse")}>
               <Avatar className="h-8 w-8 shrink-0">
-                <AvatarImage src={sender?.avatarUrl || undefined} />
+                <AvatarImage src={getUserAvatarUrl(sender)} />
                 <AvatarFallback>{sender?.displayName?.charAt(0).toUpperCase() || "?"}</AvatarFallback>
               </Avatar>
               <div className={cn("max-w-[80%]", isOwn && "text-right")}>

@@ -27,6 +27,7 @@ import { useAuthModal } from "@/lib/auth-modal-context";
 import forumsApi from "@/lib/forums-api";
 import { uploadImage, compressImage } from "@/lib/file-api";
 import type { ForumsPost, ForumsUser } from "@/lib/types";
+import { getUserAvatarUrl } from "@/lib/utils";
 import Link from "next/link";
 
 interface CommentModalProps {
@@ -78,8 +79,12 @@ export function CommentModal({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const replyImageInputRef = useRef<HTMLInputElement>(null);
 
-  const postAuthor = post.author || post.user;
   const postAuthorId = post.authorId || post.userId || "";
+  let postAuthor = post.author || post.user;
+
+  if (user && (postAuthorId === user.id || postAuthor?.id === user.id)) {
+    postAuthor = user;
+  }
 
   // Fetch comments (child posts)
   useEffect(() => {
@@ -164,7 +169,7 @@ export function CommentModal({
         setUploadingComment(false);
       }
 
-      await forumsApi.posts.create({
+      const newPost = await forumsApi.posts.create({
         threadId: post.threadId,
         body: newComment.trim(),
         userId: user?.id,
@@ -173,6 +178,51 @@ export function CommentModal({
           ? { images: [uploadedImageUrl] }
           : undefined,
       });
+
+      // Notification Logic: Reply to Post
+      if (postAuthorId && postAuthorId !== user?.id) {
+        forumsApi.notifications.create({
+          notifiedId: postAuthorId,
+          type: "REPLY",
+          description: "Someone commented on your post",
+          isSystem: false,
+          extendedData: {
+            threadId: post.threadId,
+            postId: newPost.id,
+            notifierId: user?.id,
+            preview: newComment.substring(0, 100)
+          }
+        }).catch(e => console.error("Failed to notify post author", e));
+      }
+
+      // Mention Logic
+      const mentionRegex = /@(\w+)/g;
+      const mentions = [...newComment.matchAll(mentionRegex)].map(m => m[1]);
+      const uniqueMentions = [...new Set(mentions)];
+       if (uniqueMentions.length > 0) {
+        Promise.allSettled(uniqueMentions.map(async (username) => {
+          try {
+            const mentionedUser = await forumsApi.users.getByUsername(username);
+            if (mentionedUser && mentionedUser.id !== user?.id && mentionedUser.id !== postAuthorId) {
+              await forumsApi.notifications.create({
+                notifiedId: mentionedUser.id,
+                type: "MENTION",
+                description: "You were mentioned in a comment",
+                isSystem: false,
+                extendedData: {
+                  threadId: post.threadId,
+                  postId: newPost.id,
+                  notifierId: user?.id,
+                  preview: newComment.substring(0, 100)
+                }
+              });
+            }
+          } catch (e) {
+             // Ignore
+          }
+        })).catch(console.error);
+      }
+
       setNewComment("");
       setCommentImage(null);
       setCommentImageFile(null);
@@ -209,7 +259,7 @@ export function CommentModal({
         setUploadingReply(false);
       }
 
-      await forumsApi.posts.create({
+      const newReply = await forumsApi.posts.create({
         threadId: post.threadId,
         body: replyText.trim(),
         userId: user?.id,
@@ -218,6 +268,54 @@ export function CommentModal({
           ? { images: [uploadedImageUrl] }
           : undefined,
       });
+
+      // Notification Logic: Reply to Comment
+      const parentComment = comments.find(c => c.id === parentCommentId);
+      const parentAuthorId = parentComment?.authorId || parentComment?.userId;
+
+      if (parentAuthorId && parentAuthorId !== user?.id) {
+         forumsApi.notifications.create({
+          notifiedId: parentAuthorId,
+          type: "REPLY",
+          description: "Someone replied to your comment",
+          isSystem: false,
+          extendedData: {
+            threadId: post.threadId,
+            postId: newReply.id,
+            notifierId: user?.id,
+            preview: replyText.substring(0, 100)
+          }
+        }).catch(e => console.error("Failed to notify comment author", e));
+      }
+
+       // Mention Logic
+      const mentionRegex = /@(\w+)/g;
+      const mentions = [...replyText.matchAll(mentionRegex)].map(m => m[1]);
+      const uniqueMentions = [...new Set(mentions)];
+       if (uniqueMentions.length > 0) {
+        Promise.allSettled(uniqueMentions.map(async (username) => {
+          try {
+            const mentionedUser = await forumsApi.users.getByUsername(username);
+            if (mentionedUser && mentionedUser.id !== user?.id && mentionedUser.id !== parentAuthorId) {
+              await forumsApi.notifications.create({
+                notifiedId: mentionedUser.id,
+                type: "MENTION",
+                description: "You were mentioned in a reply",
+                isSystem: false,
+                extendedData: {
+                  threadId: post.threadId,
+                  postId: newReply.id,
+                  notifierId: user?.id,
+                  preview: replyText.substring(0, 100)
+                }
+              });
+            }
+          } catch (e) {
+             // Ignore
+          }
+        })).catch(console.error);
+      }
+
       setReplyText("");
       setReplyImage(null);
       setReplyImageFile(null);
@@ -247,8 +345,13 @@ export function CommentModal({
 
   // Render a single comment with optional replies
   const renderComment = (comment: Comment, isReply = false) => {
-    const commentAuthor = comment.author || comment.user;
+    let commentAuthor = comment.author || comment.user;
     const commentAuthorId = comment.authorId || comment.userId || "";
+
+    // Use current user data if matches (for fresh avatar)
+    if (user && (commentAuthorId === user.id || commentAuthor?.id === user.id)) {
+      commentAuthor = user;
+    }
     const commentReplies = replies[comment.id] || [];
     const hasImage =
       comment.extendedData?.images && comment.extendedData.images.length > 0;
@@ -257,7 +360,7 @@ export function CommentModal({
       <div key={comment.id} className={`flex gap-3 ${isReply ? "ml-10" : ""}`}>
         <Link href={`/user/${commentAuthorId}`}>
           <Avatar className={isReply ? "h-7 w-7" : "h-8 w-8"}>
-            <AvatarImage src={commentAuthor?.avatarUrl || undefined} />
+            <AvatarImage src={getUserAvatarUrl(commentAuthor)} />
             <AvatarFallback className="text-xs">
               {commentAuthor?.displayName?.charAt(0) || "?"}
             </AvatarFallback>
@@ -272,7 +375,7 @@ export function CommentModal({
               {commentAuthor?.displayName || "Anonymous"}
             </Link>
             {comment.body && (
-              <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">
+              <p className="text-sm mt-0.5 whitespace-pre-wrap wrap-break-word">
                 {comment.body}
               </p>
             )}
@@ -315,7 +418,7 @@ export function CommentModal({
           {replyingTo === comment.id && !isReply && isAuthenticated && (
             <div className="mt-3 flex gap-2">
               <Avatar className="h-7 w-7">
-                <AvatarImage src={user?.avatarUrl || undefined} />
+                <AvatarImage src={getUserAvatarUrl(user)} />
                 <AvatarFallback className="text-xs">
                   {user?.displayName?.charAt(0) || "?"}
                 </AvatarFallback>
@@ -407,7 +510,7 @@ export function CommentModal({
             <div className="flex items-start gap-3">
               <Link href={`/user/${postAuthorId}`}>
                 <Avatar className="h-10 w-10">
-                  <AvatarImage src={postAuthor?.avatarUrl || undefined} />
+                  <AvatarImage src={getUserAvatarUrl(postAuthor)} />
                   <AvatarFallback>
                     {postAuthor?.displayName?.charAt(0) || "?"}
                   </AvatarFallback>
@@ -526,7 +629,7 @@ export function CommentModal({
 
               <div className="flex items-start gap-3">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.avatarUrl || undefined} />
+                  <AvatarImage src={getUserAvatarUrl(user)} />
                   <AvatarFallback className="text-xs">
                     {user?.displayName?.charAt(0) || "?"}
                   </AvatarFallback>

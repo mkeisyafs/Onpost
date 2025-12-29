@@ -28,6 +28,7 @@ import Link from "next/link";
 
 import { Skeleton } from "../ui/skeleton";
 import { FeedPostCard, type ExtendedPost } from "../post/feed-post-card";
+import { getUserAvatarUrl } from "@/lib/utils";
 
 interface UserProfileProps {
   userId: string;
@@ -87,7 +88,7 @@ export function UserProfile({ userId }: UserProfileProps) {
             {/* Avatar */}
             <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
               <AvatarImage
-                src={user.avatarUrl || undefined}
+                src={getUserAvatarUrl(user)}
                 alt={user.displayName}
               />
               <AvatarFallback className="text-2xl">

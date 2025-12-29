@@ -39,15 +39,17 @@ function isAccountMarketSnapshot(
 export function MarketPanel({ market }: MarketPanelProps) {
   const {
     analytics,
-    validCount,
-    thresholdValid,
+    validCount = 0,
+    thresholdValid = 10,
     marketTypeFinal,
     marketTypeCandidate,
   } = market;
-  const { locked, snapshot, updatedAt } = analytics;
+  
+  // Handle case when analytics is undefined
+  const { locked = true, snapshot = null, updatedAt = null } = analytics || {};
 
   const marketType = marketTypeFinal || marketTypeCandidate;
-  const progress = (validCount / thresholdValid) * 100;
+  const progress = thresholdValid > 0 ? (validCount / thresholdValid) * 100 : 0;
 
   // Locked state - not enough data
   if (locked || !snapshot) {

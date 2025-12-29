@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
 import forumsApi from "@/lib/forums-api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,8 @@ import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { CommentModal } from "@/components/post/comment-modal";
 import { useAuth } from "@/lib/auth-context";
-import { cn } from "@/lib/utils";
+import { invalidateHomeFeedCache } from "@/components/home/home-feed";
+import { cn, getUserAvatarUrl } from "@/lib/utils";
 import type { ForumsPost } from "@/lib/types";
 
 const intentStyles: Record<string, string> = {
@@ -40,12 +42,17 @@ export function FeedPostCard({
   hideAuthor = false,
 }: FeedPostCardProps) {
   const { user: currentUser, isAuthenticated } = useAuth();
-  const author = post.author || post.user;
   const authorId = post.authorId || post.userId || "";
+  let author = post.author || post.user;
+
+  // Use current user data if available and matches author (for immediate updates)
+  if (currentUser && (authorId === currentUser.id || author?.id === currentUser.id)) {
+    author = currentUser;
+  }
   const tags = post.extendedData?.tags || [];
   const images = post.extendedData?.images || [];
   const threadTitle = post._threadTitle;
-  const threadId = post._threadId;
+  const threadId = post._threadId || post.threadId;
   const commentCount = post._commentCount || 0;
 
   // Like state
@@ -55,12 +62,26 @@ export function FeedPostCard({
   );
   const [isLiking, setIsLiking] = useState(false);
 
+  // Sync like state with post data
+  useEffect(() => {
+    setLikeCount(post.likes?.length || 0);
+    setIsLiked(post.likes?.some((like) => like.userId === currentUser?.id) || false);
+  }, [post.likes, currentUser?.id]);
+
   // Comment modal state
   const [showCommentModal, setShowCommentModal] = useState(false);
 
+  // Local post state for optimistic updates
+  const [localPost, setLocalPost] = useState(post);
+
+  // Sync local post with prop changes
+  useEffect(() => {
+    setLocalPost(post);
+  }, [post]);
+
   // Handle Like
   const handleLike = async () => {
-    if (!isAuthenticated || isLiking) return;
+    if (!isAuthenticated || !currentUser || isLiking) return;
 
     setIsLiking(true);
     const wasLiked = isLiked;
@@ -69,16 +90,50 @@ export function FeedPostCard({
     setIsLiked(!wasLiked);
     setLikeCount((prev) => (wasLiked ? prev - 1 : prev + 1));
 
+    // Optimistic update for local post state (same as post-card.tsx)
+    setLocalPost((prev) => ({
+      ...prev,
+      likes: wasLiked
+        ? (prev.likes || []).filter((l) => l.userId !== currentUser.id)
+        : [...(prev.likes || []), { userId: currentUser.id }],
+    }));
+
     try {
       if (wasLiked) {
-        await forumsApi.posts.unlike(post.id);
+        await forumsApi.posts.unlike(post.id, currentUser.id);
       } else {
-        await forumsApi.posts.like(post.id);
+        await forumsApi.posts.like(post.id, currentUser.id);
+
+        // Notification Logic
+        if (authorId && authorId !== currentUser.id) {
+           forumsApi.notifications.create({
+            notifiedId: authorId,
+            type: "LIKE",
+            description: "Someone liked your post",
+            extendedData: {
+              threadId: post.threadId,
+              postId: post.id,
+              notifierId: currentUser.id,
+              preview: post.body.substring(0, 50)
+            }
+          }).catch(e => console.error("Failed to send like notification", e));
+        }
       }
+      // Wait for delayed consistency
+      setTimeout(() => {
+        onUpdate?.();
+      }, 1000);
     } catch (error) {
       // Revert on error
       setIsLiked(wasLiked);
       setLikeCount((prev) => (wasLiked ? prev + 1 : prev - 1));
+      // Also revert local post state
+      setLocalPost((prev) => ({
+        ...prev,
+        likes: wasLiked
+          ? [...(prev.likes || []), { userId: currentUser.id }]
+          : (prev.likes || []).filter((l) => l.userId !== currentUser.id),
+      }));
       console.error("Failed to update like:", error);
     } finally {
       setIsLiking(false);
@@ -106,7 +161,7 @@ export function FeedPostCard({
           {!hideAuthor && (
             <Link href={`/user/${authorId}`}>
               <Avatar className="h-10 w-10">
-                <AvatarImage src={author?.avatarUrl || undefined} />
+                <AvatarImage src={getUserAvatarUrl(author)} />
                 <AvatarFallback>
                   {author?.displayName?.charAt(0) || "?"}
                 </AvatarFallback>

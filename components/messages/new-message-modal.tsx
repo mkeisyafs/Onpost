@@ -13,12 +13,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { X, Search, ArrowLeft } from "lucide-react";
 import { DirectChat } from "./direct-chat";
+import { getUserAvatarUrl } from "@/lib/utils";
 
 interface SearchUser {
   id: string;
   username: string;
   displayName?: string;
   avatarUrl?: string;
+  extendedData?: {
+    profilePhoto?: string;
+  };
 }
 
 interface NewMessageModalProps {
@@ -182,7 +186,7 @@ export function NewMessageModal({
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
                       >
                         <Avatar className="h-11 w-11">
-                          <AvatarImage src={user.avatarUrl || undefined} />
+                          <AvatarImage src={getUserAvatarUrl(user as any)} />
                           <AvatarFallback className="bg-primary/10">
                             {user.displayName?.[0]?.toUpperCase() ||
                               user.username?.[0]?.toUpperCase() ||

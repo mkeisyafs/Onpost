@@ -17,7 +17,9 @@ interface InsightsPanelProps {
 
 export function InsightsPanel({ market }: InsightsPanelProps) {
   const { analytics, validCount, thresholdValid } = market;
-  const { locked, narrative, narrativeUpdatedAt } = analytics;
+  
+  // Handle case when analytics is undefined
+  const { locked = true, narrative = null, narrativeUpdatedAt = null } = analytics || {};
 
   // Locked state
   if (locked) {

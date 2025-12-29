@@ -6,8 +6,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Eye, TrendingUp, ImageIcon, Clock } from "lucide-react";
 import type { ForumsThread } from "@/lib/types";
+import { getUserAvatarUrl } from "@/lib/utils";
 import useSWR from "swr";
 import forumsApi from "@/lib/forums-api";
+import { useAuth } from "@/lib/auth-context";
 
 interface ThreadCardProps {
   thread: ForumsThread;
@@ -71,7 +73,15 @@ const intentLabels = {
 };
 
 export function ThreadCard({ thread }: ThreadCardProps) {
-  const threadAuthor = thread.author || thread.user;
+  // Use auth to get current user for fresh avatar
+  const { user } = useAuth(); // Assuming useAuth is imported or available via context if not strict import
+
+  let threadAuthor = thread.author || thread.user;
+  const threadAuthorId = thread.authorId || thread.userId || "";
+
+  if (user && (threadAuthorId === user.id || threadAuthor?.id === user.id)) {
+    threadAuthor = user;
+  }
   const market = thread.extendedData?.market;
   const coverImage = thread.extendedData?.coverImage;
   const threadIcon = thread.extendedData?.icon;
@@ -167,7 +177,7 @@ export function ThreadCard({ thread }: ThreadCardProps) {
             <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
               <Avatar className="h-5 w-5">
                 <AvatarImage
-                  src={threadAuthor?.avatarUrl || undefined}
+                  src={getUserAvatarUrl(threadAuthor)}
                   alt={threadAuthor?.displayName}
                 />
                 <AvatarFallback className="text-[10px]">

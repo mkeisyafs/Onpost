@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getUserAvatarUrl } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { AuthModal } from "@/components/auth/auth-modal";
 import forumsApi from "@/lib/forums-api";
@@ -292,7 +293,7 @@ export function Sidebar() {
               <Link href={`/user/${user.id}`} className="relative">
                 <Avatar className="h-10 w-10 border-2 border-primary/30">
                   <AvatarImage
-                    src={user.avatarUrl || undefined}
+                    src={getUserAvatarUrl(user)}
                     alt={user.displayName}
                   />
                   <AvatarFallback className="bg-linear-to-br from-primary to-accent text-primary-foreground font-bold">

@@ -15,16 +15,36 @@ interface HomeFeedProps {
   refreshKey?: number;
 }
 
-// Minimum interval between fetches (60 seconds - increased for optimization)
-const MIN_FETCH_INTERVAL = 60 * 1000;
+// Minimum interval between fetches (30 seconds - reduced for better UX)
+const MIN_FETCH_INTERVAL = 30 * 1000;
 
-// Cache for storing fetched data
-let postsCache: ForumsPost[] | null = null;
+// Module-level cache (persists across mounts for performance)
+let postsCache: ExtendedPost[] | null = null;
 let lastFetchTime = 0;
-let isFetching = false; // Prevent concurrent fetches
+let cacheVersion = 0; // Incremented when cache is invalidated
+
+// Cache for thread titles to avoid fetching same thread multiple times
+const threadTitleCache = new Map<string, string>();
+
+// Set of callbacks to notify HomeFeed instances when cache is invalidated
+const cacheInvalidationListeners = new Set<() => void>();
+
+/**
+ * Call this function to invalidate the HomeFeed cache and trigger a refetch.
+ * Use this after creating a post, liking a post, or any action that should
+ * update the feed.
+ */
+export function invalidateHomeFeedCache() {
+  console.log("[HomeFeed] Cache invalidated externally");
+  postsCache = null;
+  lastFetchTime = 0;
+  cacheVersion++;
+  // Notify all mounted HomeFeed instances
+  cacheInvalidationListeners.forEach((listener) => listener());
+}
 
 export function HomeFeed({ refreshKey }: HomeFeedProps) {
-  const [posts, setPosts] = useState<ForumsPost[]>(postsCache || []);
+  const [posts, setPosts] = useState<ExtendedPost[]>(postsCache || []);
   const [isLoading, setIsLoading] = useState(!postsCache);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -35,6 +55,13 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
   const lastRefreshKey = useRef(refreshKey);
+  
+  // Per-component fetch lock (prevents issues with global lock getting stuck)
+  const isFetchingRef = useRef(false);
+  // Track if component is mounted (for cleanup)
+  const isMountedRef = useRef(true);
+  // Track cache version to detect invalidation
+  const lastCacheVersionRef = useRef(cacheVersion);
 
   const PULL_THRESHOLD = 80; // pixels to trigger refresh
 
@@ -42,8 +69,15 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
   const fetchPosts = useCallback(async (forceRefresh = false) => {
     const now = Date.now();
 
+    // Check if cache was invalidated externally
+    if (lastCacheVersionRef.current !== cacheVersion) {
+      forceRefresh = true;
+      lastCacheVersionRef.current = cacheVersion;
+    }
+
     // Skip if currently fetching (prevent concurrent requests)
-    if (isFetching) {
+    // But allow if forceRefresh AND we've been waiting too long (safety valve)
+    if (isFetchingRef.current) {
       console.log("[HomeFeed] Skipping - fetch already in progress");
       return;
     }
@@ -52,19 +86,21 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
     if (
       !forceRefresh &&
       postsCache &&
+      postsCache.length > 0 &&
       now - lastFetchTime < MIN_FETCH_INTERVAL
     ) {
       console.log("[HomeFeed] Skipping fetch - using cached data");
+      // Still sync local state with cache in case it was updated elsewhere
       setPosts(postsCache);
       setIsLoading(false);
       return;
     }
 
     // Mark as fetching
-    isFetching = true;
+    isFetchingRef.current = true;
 
     // Set loading state appropriately
-    if (!postsCache) {
+    if (!postsCache || postsCache.length === 0) {
       setIsLoading(true);
     } else {
       setIsRefreshing(true);
@@ -72,11 +108,18 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
     setError(null);
 
     try {
+      console.log("[HomeFeed] Fetching posts...", { forceRefresh });
+      
       // Fetch posts directly from /posts endpoint (much more efficient!)
       const postsResponse = await forumsApi.posts.listAll({
         limit: 50,
         filter: "newest",
       });
+
+      // Check if component unmounted during fetch
+      if (!isMountedRef.current) {
+        return;
+      }
 
       if (!postsResponse.posts || postsResponse.posts.length === 0) {
         setPosts([]);
@@ -99,26 +142,81 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
       // Limit to 50 posts for performance
       const finalPosts = mainPosts.slice(0, 50);
 
-      // Update cache
-      postsCache = finalPosts;
-      lastFetchTime = now;
+      // Enrich posts with thread titles
+      // 1. Identify missing thread titles
+      const threadIdsToFetch = Array.from(
+        new Set(
+          finalPosts
+            .map((p) => p.threadId)
+            .filter((id) => id && !threadTitleCache.has(id))
+        )
+      );
 
-      setPosts(finalPosts);
+      // 2. Fetch missing threads (in parallel, but be handled gracefully)
+      if (threadIdsToFetch.length > 0) {
+        try {
+          await Promise.allSettled(
+            threadIdsToFetch.map(async (id) => {
+              try {
+                const thread = await forumsApi.threads.get(id);
+                if (thread && thread.title) {
+                  threadTitleCache.set(id, thread.title);
+                }
+              } catch (e) {
+                // Ignore individual thread fetch errors
+                console.warn(`Failed to fetch thread info for ${id}`, e);
+              }
+            })
+          );
+        } catch (e) {
+          console.error("Error fetching thread titles", e);
+        }
+      }
+
+      // Check again if component unmounted
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      // 3. Map to ExtendedPost
+      const enrichedPosts: ExtendedPost[] = finalPosts.map((post) => ({
+        ...post,
+        _threadTitle: threadTitleCache.get(post.threadId),
+        _threadId: post.threadId,
+      }));
+
+      // Update cache
+      postsCache = enrichedPosts;
+      lastFetchTime = now;
+      lastCacheVersionRef.current = cacheVersion;
+
+      console.log("[HomeFeed] Fetch complete, got", enrichedPosts.length, "posts");
+      setPosts(enrichedPosts);
     } catch (err) {
+      // Check if component unmounted
+      if (!isMountedRef.current) {
+        return;
+      }
+      
       // Use friendly error message, suppress technical details
       const errorMessage = err instanceof Error ? err.message : "";
       // Only show error if it's not a 401 (session expired) - silently fail for auth issues
       if (errorMessage.includes("session has expired")) {
         setError(null); // Suppress auth errors, just show empty or cached data
       } else {
+        console.error("[HomeFeed] Fetch error:", err);
         setError(
           errorMessage || "Unable to load feed. Pull down to try again."
         );
       }
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-      isFetching = false; // Release lock
+      // Always release lock
+      isFetchingRef.current = false;
+      
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, []);
 
@@ -126,6 +224,31 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
   const handleRefresh = useCallback(async () => {
     console.log("[HomeFeed] Manual refresh triggered");
     await fetchPosts(true);
+  }, [fetchPosts]);
+
+  // Track mounted state and cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+      // Release lock on unmount to prevent stuck state
+      isFetchingRef.current = false;
+    };
+  }, []);
+
+  // Subscribe to cache invalidation events
+  useEffect(() => {
+    const handleCacheInvalidation = () => {
+      console.log("[HomeFeed] Cache invalidation received, refetching...");
+      fetchPosts(true);
+    };
+
+    cacheInvalidationListeners.add(handleCacheInvalidation);
+    
+    return () => {
+      cacheInvalidationListeners.delete(handleCacheInvalidation);
+    };
   }, [fetchPosts]);
 
   // Fetch posts on mount and when refreshKey changes
@@ -253,7 +376,7 @@ export function HomeFeed({ refreshKey }: HomeFeedProps) {
         }}
       >
         {posts.map((post) => (
-          <FeedPostCard key={post.id} post={post as ExtendedPost} />
+          <FeedPostCard key={post.id} post={post} />
         ))}
       </div>
     </div>

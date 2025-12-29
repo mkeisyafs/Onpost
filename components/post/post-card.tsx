@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
@@ -55,7 +55,7 @@ import { uploadImage, compressImage, uploadBase64Image } from "@/lib/file-api";
 import type { ForumsPost } from "@/lib/types";
 import { CommentModal } from "./comment-modal";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { cn } from "@/lib/utils";
+import { cn, getUserAvatarUrl } from "@/lib/utils";
 
 import { ImageViewer } from "@/components/ui/image-viewer";
 import { ImageCropper } from "@/components/ui/image-cropper";
@@ -96,12 +96,27 @@ export function PostCard({
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
   const postAuthorId = post.authorId || post.userId || "";
-  const postAuthor = post.author || post.user;
+  let postAuthor = post.author || post.user;
+
+  if (currentUser && (postAuthorId === currentUser.id || postAuthor?.id === currentUser.id)) {
+    postAuthor = currentUser;
+  }
 
   const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
   const [isLiked, setIsLiked] = useState(
     post.likes?.some((like) => like.userId === currentUser?.id) || false
   );
+
+  // Sync local state with prop changes
+  useEffect(() => {
+    setPost(initialPost);
+  }, [initialPost]);
+
+  // Sync like state with post data
+  useEffect(() => {
+    setLikeCount(post.likes?.length || 0);
+    setIsLiked(post.likes?.some((like) => like.userId === currentUser?.id) || false);
+  }, [post.likes, currentUser?.id]);
 
   // Handle Edit Image Selection
   const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -263,27 +278,37 @@ export function PostCard({
 
   const displayBody = post.body.replace(/\n\n\[Image \d+\]\s*/g, "").trim();
 
-  const handleLike = async () => {
-    if (!isAuthenticated || isLiking) return;
+const handleLike = async () => {
+  if (!isAuthenticated || !currentUser || isLiking) return;
 
-    setIsLiking(true);
-    try {
-      if (isLiked) {
-        await forumsApi.posts.unlike(post.id, currentUser?.id);
-        setIsLiked(false);
-        setLikeCount((prev) => Math.max(0, prev - 1));
-      } else {
-        await forumsApi.posts.like(post.id, currentUser?.id);
-        setIsLiked(true);
-        setLikeCount((prev) => prev + 1);
-      }
-    } catch (error) {
-      console.error("Failed to toggle like:", error);
-    } finally {
-      setIsLiking(false);
+  setIsLiking(true);
+  const wasLiked = isLiked;
+
+  // optimistic UI
+  setIsLiked(!wasLiked);
+  setLikeCount((prev) => (wasLiked ? prev - 1 : prev + 1));
+
+  setPost((prev) => ({
+    ...prev,
+    likes: wasLiked
+      ? (prev.likes || []).filter((l) => l.userId !== currentUser!.id)
+      : [...(prev.likes || []), { userId: currentUser!.id }],
+  }));
+
+  try {
+    if (wasLiked) {
+      await forumsApi.posts.unlike(post.id, currentUser.id);
+    } else {
+      await forumsApi.posts.like(post.id, currentUser.id);
     }
-  };
-
+  } catch (err) {
+    // rollback kalau error
+    setIsLiked(wasLiked);
+    setLikeCount((prev) => (wasLiked ? prev + 1 : prev - 1));
+  } finally {
+    setIsLiking(false);
+  }
+};
   return (
     <>
       <div
@@ -301,7 +326,7 @@ export function PostCard({
             <Link href={`/user/${postAuthorId}`} className="shrink-0 relative">
               <Avatar className="h-10 w-10 border-2 border-primary/20">
                 <AvatarImage
-                  src={postAuthor?.avatarUrl || undefined}
+                  src={getUserAvatarUrl(postAuthor)}
                   alt={postAuthor?.displayName}
                 />
                 <AvatarFallback className="bg-linear-to-br from-primary to-accent text-primary-foreground font-bold">

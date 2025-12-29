@@ -3,7 +3,7 @@
 import { formatDistanceToNow } from "date-fns"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+import { cn, getUserAvatarUrl } from "@/lib/utils"
 import type { ForumsPrivateMessage } from "@/lib/types"
 
 interface PMListProps {
@@ -33,7 +33,7 @@ export function PMList({ messages, selectedId, onSelect, folder }: PMListProps) 
             <CardContent className="p-3">
               <div className="flex gap-3">
                 <Avatar className="h-10 w-10 shrink-0">
-                  <AvatarImage src={otherUser?.avatarUrl || undefined} />
+                  <AvatarImage src={getUserAvatarUrl(otherUser)} />
                   <AvatarFallback>{otherUser?.displayName?.charAt(0).toUpperCase() || "?"}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">

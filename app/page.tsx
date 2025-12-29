@@ -190,6 +190,9 @@ export default function HomePage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Feed */}
         <div className="lg:col-span-2">
+          {/* Live Feed Composer */}
+          
+
           {/* Onboarding Card - Dismissible */}
           {showOnboarding && (
             <div className="mb-6 rounded-xl border border-primary/20 bg-linear-to-r from-primary/5 to-primary/10 p-4 relative">

@@ -15,17 +15,20 @@ import {
 import forumsApi from "@/lib/forums-api";
 import { uploadImage, compressImage, uploadBase64Image } from "@/lib/file-api";
 import { useAuth } from "@/lib/auth-context";
+import { invalidateHomeFeedCache } from "@/components/home/home-feed";
 import { ImageIcon, X, Smile, MapPin, Send, Loader2, Crop } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getUserAvatarUrl } from "@/lib/utils";
 
 interface CreatePostFormProps {
   threadId: string;
   onPostCreated?: () => void;
+  threadAuthorId?: string;
 }
 
 export function CreatePostForm({
   threadId,
   onPostCreated,
+  threadAuthorId,
 }: CreatePostFormProps) {
   const { user } = useAuth();
   const [body, setBody] = useState("");
@@ -184,18 +187,68 @@ export function CreatePostForm({
         extendedData.images = uploadedImageUrls;
       }
 
-      await forumsApi.posts.create({
+      const post = await forumsApi.posts.create({
         threadId,
         body: postBody,
         userId: user?.id,
         extendedData: Object.keys(extendedData).length > 0 ? extendedData : undefined,
       });
 
+      // Frontend Notification Logic
+      // 1. Thread Reply Notification
+      if (threadAuthorId && threadAuthorId !== user?.id) {
+        forumsApi.notifications.create({
+          notifiedId: threadAuthorId,
+          type: "THREAD_REPLY",
+          description: "New reply to your thread",
+          isSystem: false,
+          extendedData: {
+            threadId,
+            postId: post.id, 
+            notifierId: user?.id,
+            preview: postBody.substring(0, 100)
+          }
+        }).catch(e => console.error("Failed to send thread reply notification", e));
+      }
+
+      // 2. Mention Notifications
+      const mentionRegex = /@(\w+)/g;
+      const mentions = [...postBody.matchAll(mentionRegex)].map(m => m[1]);
+      const uniqueMentions = [...new Set(mentions)];
+
+      if (uniqueMentions.length > 0) {
+        Promise.allSettled(uniqueMentions.map(async (username) => {
+          try {
+            const mentionedUser = await forumsApi.users.getByUsername(username);
+            if (mentionedUser && mentionedUser.id !== user?.id && mentionedUser.id !== threadAuthorId) {
+              await forumsApi.notifications.create({
+                notifiedId: mentionedUser.id,
+                type: "MENTION",
+                description: "You were mentioned in a post",
+                isSystem: false,
+                extendedData: {
+                  threadId,
+                  postId: post.id,
+                  notifierId: user?.id,
+                  preview: postBody.substring(0, 100)
+                }
+              });
+            }
+          } catch (e) {
+            console.warn(`Failed to notify mentioned user ${username}`, e);
+          }
+        })).catch(e => console.error("Error processing mentions", e));
+      }
+
       // Cleanup
       setBody("");
       setImages([]);
       setDetectedTrade(null);
       setSelectedTag(null);
+      
+      // Invalidate HomeFeed cache so the new post appears immediately
+      invalidateHomeFeedCache();
+      
       onPostCreated?.();
     } catch (err) {
       console.error("[Post] Error creating post:", err);
@@ -226,7 +279,7 @@ export function CreatePostForm({
         {/* User Header */}
         <div className="flex items-center gap-3 px-1">
           <Avatar className="h-10 w-10 shrink-0 border border-border">
-            <AvatarImage src={user?.avatarUrl || undefined} />
+            <AvatarImage src={getUserAvatarUrl(user)} />
             <AvatarFallback className="bg-primary/10 text-primary font-semibold">
               {userInitials}
             </AvatarFallback>

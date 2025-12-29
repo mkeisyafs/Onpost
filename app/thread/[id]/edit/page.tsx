@@ -278,7 +278,7 @@ export default function EditThreadPage() {
                   className="hidden"
                 />
                 {coverImage ? (
-                  <div className="relative aspect-3/1 w-full rounded-xl overflow-hidden bg-muted border group">
+                  <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-muted border group">
                     <img
                       src={coverImage.url}
                       alt="Cover"
@@ -311,7 +311,7 @@ export default function EditThreadPage() {
                   <button
                     type="button"
                     onClick={() => coverInputRef.current?.click()}
-                    className="w-full aspect-3/1 rounded-xl border-2 border-dashed border-border hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground"
+                     className="w-full aspect-video rounded-xl border-2 border-dashed border-border hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground"
                   >
                     <ImageIcon className="h-8 w-8" />
                     <span className="text-sm font-medium">Add Cover Image</span>
@@ -420,9 +420,9 @@ export default function EditThreadPage() {
           onClose={handleCropCancel}
           imageSrc={cropImageSrc}
           onCropComplete={handleCropComplete}
-          aspectRatio={cropType === "cover" ? 3 / 1 : 1}
-          cropShape={cropType === "icon" ? "round" : "rect"}
-          title={cropType === "cover" ? "Crop Banner Image" : "Crop Icon"}
+          aspectRatio={cropType === "cover" ? 16 / 9 : 1}
+          cropShape="rect"
+          title={cropType === "cover" ? "Crop Banner Image (16:9)" : "Crop Icon"}
         />
       )}
     </div>

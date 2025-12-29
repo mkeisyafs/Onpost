@@ -18,7 +18,7 @@ import {
   ImageIcon,
   ThumbsUp,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getUserAvatarUrl } from "@/lib/utils";
 import type { ForumsPrivateMessage } from "@/lib/types";
 
 interface ChatUser {
@@ -26,6 +26,9 @@ interface ChatUser {
   username: string;
   displayName?: string;
   avatarUrl?: string;
+  extendedData?: {
+    profilePhoto?: string;
+  };
 }
 
 interface DirectChatProps {
@@ -165,8 +168,8 @@ export function DirectChat({ recipientUser, onMessageSent }: DirectChatProps) {
         ) : localMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-4">
             <Avatar className="h-16 w-16 mb-3">
-              <AvatarImage src={recipientUser.avatarUrl || undefined} />
-              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xl">
+              <AvatarImage src={getUserAvatarUrl(recipientUser as any)} />
+              <AvatarFallback className="bg-linear-to-br from-blue-500 to-purple-600 text-white text-xl">
                 {recipientUser.displayName?.[0]?.toUpperCase() ||
                   recipientUser.username?.[0]?.toUpperCase() ||
                   "U"}
@@ -201,9 +204,9 @@ export function DirectChat({ recipientUser, onMessageSent }: DirectChatProps) {
                       {showAvatar && (
                         <Avatar className="h-6 w-6">
                           <AvatarImage
-                            src={recipientUser.avatarUrl || undefined}
+                            src={getUserAvatarUrl(recipientUser as any)}
                           />
-                          <AvatarFallback className="text-[10px] bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                          <AvatarFallback className="text-[10px] bg-linear-to-br from-blue-500 to-purple-600 text-white">
                             {recipientUser.displayName?.[0]?.toUpperCase() ||
                               "?"}
                           </AvatarFallback>

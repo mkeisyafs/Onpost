@@ -16,6 +16,8 @@ import type {
   UserExtendedData,
   LoginResponse,
   RegisterResponse,
+  ForumsNotification,
+  PaginatedResponse,
 } from "./types";
 
 function getBaseUrl() {
@@ -613,6 +615,64 @@ export const search = {
   },
 };
 
+// ============================================
+// Notification Endpoints
+// ============================================
+
+export const notifications = {
+  async create(data: {
+    notifiedId?: string;
+    type: string;
+    description?: string;
+    extendedData?: Record<string, any>;
+    isSystem?: boolean; // Helper to distinguish but mapped to type or handled by backend? Docs say notifierId is required if API Key. JWT handles it.
+  }): Promise<ForumsNotification> {
+    const payload: any = {
+      type: data.type,
+      description: data.description,
+      extendedData: data.extendedData
+    };
+    if (data.notifiedId) payload.userId = data.notifiedId; // The docs say "notifiedId" or "userId" in response? Docs: Request body has "notifiedId". 
+    // Wait, let's check docs again. Step 236: "notifiedId?: string" in Request Body.
+    // So I use notifiedId.
+    if (data.notifiedId) payload.notifiedId = data.notifiedId;
+
+    return request<ForumsNotification>("/notification", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async list(params?: {
+    read?: boolean;
+    cursor?: string;
+    limit?: number;
+  }): Promise<PaginatedResponse<ForumsNotification>> {
+    const searchParams = new URLSearchParams();
+    if (params?.read !== undefined) searchParams.set("read", params.read.toString());
+    if (params?.cursor) searchParams.set("cursor", params.cursor);
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+
+    const query = searchParams.toString();
+    return request<PaginatedResponse<ForumsNotification>>(
+      `/notifications${query ? `?${query}` : ""}`
+    );
+  },
+
+  async markRead(id: string): Promise<ForumsNotification> {
+    return request<ForumsNotification>(`/notification/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ read: true }),
+    });
+  },
+
+  async markAllRead(): Promise<void> {
+    return request<void>(`/notifications/read`, {
+      method: "POST",
+    });
+  },
+};
+
 // Default export with all namespaces
 const forumsApi = {
   auth,
@@ -622,6 +682,7 @@ const forumsApi = {
   messages,
   tags,
   search,
+  notifications,
   setAccessToken,
   getAccessToken,
 };
