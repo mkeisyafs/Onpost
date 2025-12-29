@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { HomeFeed } from "@/components/home/home-feed";
+import { HomePostComposer } from "@/components/home/home-post-composer";
 import { AIMarketAssistant } from "@/components/home/ai-market-assistant";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,16 +16,24 @@ interface FeedStats {
   trendingTags: { tag: string; count: number }[];
 }
 
+// Stats cache to prevent spam
+let statsCache: FeedStats | null = null;
+let statsLastFetchTime = 0;
+const STATS_MIN_FETCH_INTERVAL = 30 * 1000; // 30 seconds
+
 export default function HomePage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [stats, setStats] = useState<FeedStats>({
-    activeToday: 0,
-    newPosts: 0,
-    negotiations: 0,
-    trendingTags: [],
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<FeedStats>(
+    statsCache || {
+      activeToday: 0,
+      newPosts: 0,
+      negotiations: 0,
+      trendingTags: [],
+    }
+  );
+  const [isLoading, setIsLoading] = useState(!statsCache);
+  const lastRefreshKey = useRef(refreshKey);
 
   // Check onboarding visibility on client side only
   useEffect(() => {
@@ -34,11 +43,25 @@ export default function HomePage() {
 
   const handlePostCreated = () => {
     setRefreshKey((prev) => prev + 1);
-    // Also refresh stats
-    fetchStats();
+    // Also refresh stats (force refresh)
+    fetchStats(true);
   };
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async (forceRefresh = false) => {
+    const now = Date.now();
+
+    // Skip if not enough time has passed and we have cached data (unless forced)
+    if (
+      !forceRefresh &&
+      statsCache &&
+      now - statsLastFetchTime < STATS_MIN_FETCH_INTERVAL
+    ) {
+      console.log("[HomePage] Skipping stats fetch - using cached data");
+      setStats(statsCache);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await forumsApi.threads.list({
         limit: 50,
@@ -46,8 +69,8 @@ export default function HomePage() {
       });
 
       if (response.threads) {
-        const now = new Date();
-        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const nowTime = new Date();
+        const oneDayAgo = new Date(nowTime.getTime() - 24 * 60 * 60 * 1000);
 
         // Count threads created today
         const threadsToday = response.threads.filter(
@@ -88,23 +111,29 @@ export default function HomePage() {
           .sort((a, b) => b.count - a.count)
           .slice(0, 4);
 
-        setStats({
+        const newStats = {
           activeToday: response.threads.length,
           newPosts: totalPosts,
           negotiations: totalWtb,
           trendingTags,
-        });
+        };
+
+        // Update cache
+        statsCache = newStats;
+        statsLastFetchTime = now;
+
+        setStats(newStats);
       }
     } catch (error) {
       console.error("Failed to fetch stats:", error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [fetchStats]);
 
   return (
     <div className="w-full px-4 py-6 lg:px-6">
@@ -196,6 +225,7 @@ export default function HomePage() {
               </p>
             </div>
           )}
+
 
           {/* Feed */}
           <HomeFeed refreshKey={refreshKey} />

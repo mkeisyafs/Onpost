@@ -155,7 +155,7 @@ export function UserProfile({ userId }: UserProfileProps) {
                   </Button>
                 ) : (
                   <Button size="sm" asChild>
-                    <Link href={`/messages/compose?recipientId=${user.id}`}>
+                    <Link href={`/messages`}>
                       <MessageSquare className="mr-1 h-4 w-4" />
                       Message
                     </Link>

@@ -26,6 +26,10 @@ export function PostList({ threadId }: PostListProps) {
       }),
     {
       revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60000, // Don't refetch for 60 seconds
+      shouldRetryOnError: false, // Don't auto-retry on error
+      errorRetryCount: 0, // Disable error retry
     }
   );
 

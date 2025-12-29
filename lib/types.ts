@@ -29,13 +29,14 @@ export interface ForumsThread {
   user?: ForumsUser;
   author?: ForumsUser;
   categoryId?: string;
-  tags: string[];
+  tags: (string | Tag)[];
   isPinned?: boolean;
   isLocked?: boolean;
   pinned?: boolean;
   locked?: boolean;
   postCount?: number;
   viewCount?: number;
+  likeCount?: number;
   createdAt: string;
   updatedAt: string;
   extendedData?: ThreadExtendedData;
@@ -201,6 +202,7 @@ export interface ThreadExtendedData {
   coverImage?: string;
   icon?: string;
   category?: "game-items" | "accounts" | "physical" | "services";
+  images?: string[];
 }
 
 // User Trust Data

@@ -12,6 +12,7 @@ import {
   createTradeData,
 } from "@/lib/trade-detection";
 import forumsApi from "@/lib/forums-api";
+import { uploadImage, compressImage } from "@/lib/file-api";
 import { useAuth } from "@/lib/auth-context";
 import { ImageIcon, X, Smile, MapPin, Send, Loader2 } from "lucide-react";
 
@@ -27,6 +28,7 @@ export function CreatePostForm({
   const { user } = useAuth();
   const [body, setBody] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detectedTrade, setDetectedTrade] = useState<ReturnType<
     typeof createTradeData
@@ -86,61 +88,38 @@ export function CreatePostForm({
     let postBody = tagPrefix + body.trim();
 
     try {
-      // Compress and convert images to base64 for storage in extendedData
-      const compressImage = async (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-          const img = document.createElement("img");
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-
-          img.onload = () => {
-            // Max dimensions for compression
-            const MAX_WIDTH = 1024;
-            const MAX_HEIGHT = 1024;
-            let { width, height } = img;
-
-            // Calculate new dimensions while maintaining aspect ratio
-            if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-              const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
-              width = Math.round(width * ratio);
-              height = Math.round(height * ratio);
+      // Upload images to file server (not base64!)
+      const uploadedImageUrls: string[] = [];
+      if (images.length > 0) {
+        setIsUploading(true);
+        for (const img of images) {
+          if (img.file) {
+            try {
+              const compressed = await compressImage(img.file, 1024, 0.8);
+              const result = await uploadImage(compressed);
+              uploadedImageUrls.push(result.url);
+            } catch (uploadErr) {
+              console.error("Failed to upload image:", uploadErr);
             }
-
-            canvas.width = width;
-            canvas.height = height;
-            ctx?.drawImage(img, 0, 0, width, height);
-
-            // Compress to JPEG with 0.7 quality (good balance of size/quality)
-            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
-            resolve(compressedBase64);
-          };
-
-          img.onerror = () => reject(new Error("Failed to load image"));
-          img.src = URL.createObjectURL(file);
-        });
-      };
-
-      const imageDataPromises = images.map(async (img) => {
-        if (img.file) {
-          return compressImage(img.file);
+          }
         }
-        return img.url;
-      });
-      const imageUrls = await Promise.all(imageDataPromises);
-
-      // Build post body - include image placeholders if any
-      if (imageUrls.length > 0) {
-        postBody +=
-          "\n\n" + imageUrls.map((_, i) => `[Image ${i + 1}]`).join(" ");
+        setIsUploading(false);
       }
 
-      // Build extendedData
+      // Build post body - include image placeholders if any
+      if (uploadedImageUrls.length > 0) {
+        postBody +=
+          "\n\n" +
+          uploadedImageUrls.map((_, i) => `[Image ${i + 1}]`).join(" ");
+      }
+
+      // Build extendedData with image URLs (not base64!)
       const extendedData: Record<string, unknown> = {};
       if (detectedTrade) {
         extendedData.trade = detectedTrade;
       }
-      if (imageUrls.length > 0) {
-        extendedData.images = imageUrls;
+      if (uploadedImageUrls.length > 0) {
+        extendedData.images = uploadedImageUrls;
       }
 
       await forumsApi.posts.create({
@@ -198,8 +177,7 @@ export function CreatePostForm({
     }
   };
 
-  const userInitials =
-    user?.displayName?.[0] || user?.username?.[0] || "U";
+  const userInitials = user?.displayName?.[0] || user?.username?.[0] || "U";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -389,10 +367,17 @@ export function CreatePostForm({
         {/* Post Button */}
         <Button
           type="submit"
-          disabled={isSubmitting || (!body.trim() && images.length === 0)}
+          disabled={
+            isSubmitting || isUploading || (!body.trim() && images.length === 0)
+          }
           className="rounded-full px-6 font-semibold bg-primary hover:bg-primary/90 shadow-sm transition-all"
         >
-          {isSubmitting ? (
+          {isUploading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Uploading...
+            </>
+          ) : isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Posting...

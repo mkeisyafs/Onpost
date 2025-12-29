@@ -25,12 +25,14 @@ interface NewMessageModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onMessageSent?: () => void;
+  onSelectUser?: (user: SearchUser) => void;
 }
 
 export function NewMessageModal({
   open,
   onOpenChange,
   onMessageSent,
+  onSelectUser,
 }: NewMessageModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState<SearchUser[]>([]);
@@ -89,7 +91,14 @@ export function NewMessageModal({
   }, [open]);
 
   const handleSelectUser = (user: SearchUser) => {
-    setSelectedUser(user);
+    // If callback provided, use it to select user in parent page
+    if (onSelectUser) {
+      onSelectUser(user);
+      onOpenChange(false);
+    } else {
+      // Fallback to old behavior - show chat in modal
+      setSelectedUser(user);
+    }
   };
 
   const handleBack = () => {

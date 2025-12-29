@@ -40,12 +40,8 @@ export function TradeActions({
   if (!trade) return null;
 
   const handleContactSeller = () => {
-    // Navigate to PM compose with pre-filled data
-    const params = new URLSearchParams();
-    if (post.authorId) params.set("recipientId", post.authorId);
-    params.set("linkedPostId", post.id);
-    params.set("subject", `Re: ${trade.intent} Inquiry`);
-    router.push(`/messages/compose?${params.toString()}`);
+    // Navigate to messages page
+    router.push(`/messages`);
   };
 
   const handleMarkAsSold = async () => {

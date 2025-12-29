@@ -54,6 +54,10 @@ export default function MessagesPage() {
   >([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  // Pending new user for conversation (user not in existing conversations)
+  const [pendingNewUser, setPendingNewUser] = useState<ConversationUser | null>(
+    null
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -211,8 +215,18 @@ export default function MessagesPage() {
     }
   );
 
-  // Get selected conversation
-  const selectedConversation = allData?.find((c) => c.id === selectedUserId);
+  // Get selected conversation (or create one from pending new user)
+  const selectedConversation =
+    allData?.find((c) => c.id === selectedUserId) ||
+    (pendingNewUser && selectedUserId === pendingNewUser.id
+      ? {
+          id: pendingNewUser.id,
+          user: pendingNewUser,
+          lastMessage: null as unknown as ForumsPrivateMessage,
+          unread: false,
+          allMessages: [],
+        }
+      : undefined);
 
   // Get messages for selected conversation (from cached data + pending)
   const chatMessages = selectedConversation
@@ -362,6 +376,32 @@ export default function MessagesPage() {
     setSelectedImageFile(null);
     if (imageInputRef.current) {
       imageInputRef.current.value = "";
+    }
+  };
+
+  // Handle selecting a user from new message modal
+  const handleSelectNewUser = (user: {
+    id: string;
+    username: string;
+    displayName?: string;
+    avatarUrl?: string;
+  }) => {
+    // Check if conversation already exists
+    const existingConv = allData?.find((c) => c.id === user.id);
+
+    if (existingConv) {
+      // Select existing conversation
+      setSelectedUserId(user.id);
+      setPendingNewUser(null);
+    } else {
+      // Set pending new user for new conversation
+      setPendingNewUser({
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl || null,
+      });
+      setSelectedUserId(user.id);
     }
   };
 
@@ -797,6 +837,7 @@ export default function MessagesPage() {
         open={showNewMessage}
         onOpenChange={setShowNewMessage}
         onMessageSent={() => mutate()}
+        onSelectUser={handleSelectNewUser}
       />
     </div>
   );

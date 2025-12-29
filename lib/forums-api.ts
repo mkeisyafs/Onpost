@@ -71,7 +71,19 @@ async function request<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `API Error: ${response.status}`);
+
+    // Provide user-friendly error messages instead of raw API errors
+    if (response.status === 401) {
+      throw new Error("Your session has expired. Please sign in again.");
+    } else if (response.status === 403) {
+      throw new Error("You don't have permission to access this.");
+    } else if (response.status === 404) {
+      throw new Error("The content you're looking for was not found.");
+    } else if (response.status === 500) {
+      throw new Error("A server error occurred. Please try again later.");
+    }
+
+    throw new Error(error.message || "Something went wrong. Please try again.");
   }
 
   return response.json();

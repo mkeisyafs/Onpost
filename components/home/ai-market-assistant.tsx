@@ -59,6 +59,7 @@ export function AIMarketAssistant() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [selectedListing, setSelectedListing] =
     useState<AssistantListing | null>(null);
   const [selectedPost, setSelectedPost] = useState<ForumsPost | null>(null);
@@ -66,6 +67,14 @@ export function AIMarketAssistant() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { isAuthenticated } = useAuth();
   const { openAuthModal } = useAuthModal();
+
+  // Detect mobile on mount and handle resize
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Load messages from localStorage on mount
   useEffect(() => {
@@ -198,9 +207,6 @@ export function AIMarketAssistant() {
     setSelectedListing(null);
     setSelectedPost(null);
   };
-
-  // Mobile: collapsible
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
 
   return (
     <>

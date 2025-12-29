@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      throw new Error("Failed to search users. Please try again.");
     }
 
     const data: PostsResponse = await response.json();

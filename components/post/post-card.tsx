@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import forumsApi from "@/lib/forums-api";
+import { uploadImage, compressImage } from "@/lib/file-api";
 import type { ForumsPost } from "@/lib/types";
 import { CommentModal } from "./comment-modal";
 import { cn } from "@/lib/utils";
@@ -74,6 +75,7 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
     { url: string; file?: File; isExisting?: boolean }[]
   >([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploadingEdit, setIsUploadingEdit] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -93,50 +95,37 @@ export function PostCard({ post, replies = [], onUpdate }: PostCardProps) {
 
     setIsEditing(true);
     try {
-      // Compress and convert new images to base64
-      const compressImage = async (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-          const img = document.createElement("img");
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
+      // Upload new images to file server
+      const uploadedImageUrls: string[] = [];
+      const newImages = editImages.filter((img) => img.file);
+      const existingImages = editImages
+        .filter((img) => img.isExisting)
+        .map((img) => img.url);
 
-          img.onload = () => {
-            const MAX_WIDTH = 1024;
-            const MAX_HEIGHT = 1024;
-            let { width, height } = img;
-
-            if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-              const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
-              width = Math.round(width * ratio);
-              height = Math.round(height * ratio);
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            ctx?.drawImage(img, 0, 0, width, height);
-            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
-            resolve(compressedBase64);
-          };
-
-          img.onerror = () => reject(new Error("Failed to load image"));
-          img.src = URL.createObjectURL(file);
-        });
-      };
-
-      const imageUrls = await Promise.all(
-        editImages.map(async (img) => {
+      if (newImages.length > 0) {
+        setIsUploadingEdit(true);
+        for (const img of newImages) {
           if (img.file) {
-            return compressImage(img.file);
+            try {
+              const compressed = await compressImage(img.file, 1024, 0.8);
+              const result = await uploadImage(compressed);
+              uploadedImageUrls.push(result.url);
+            } catch (uploadErr) {
+              console.error("Failed to upload image:", uploadErr);
+            }
           }
-          return img.url;
-        })
-      );
+        }
+        setIsUploadingEdit(false);
+      }
+
+      // Combine existing URLs with newly uploaded URLs
+      const allImageUrls = [...existingImages, ...uploadedImageUrls];
 
       await forumsApi.posts.update(post.id, {
         body: editBody,
         extendedData: {
           ...post.extendedData,
-          images: imageUrls.length > 0 ? imageUrls : undefined,
+          images: allImageUrls.length > 0 ? allImageUrls : undefined,
         },
       });
       setShowEditDialog(false);
