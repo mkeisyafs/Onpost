@@ -31,7 +31,6 @@ export function UserListings({ userId }: UserListingsProps) {
       revalidateOnFocus: false,
     },
   )
-
   useEffect(() => {
     if (data?.posts) {
       // Filter to only trade posts
